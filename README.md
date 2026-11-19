@@ -94,6 +94,14 @@ Copy `secrets.example.yaml` to `secrets.yaml` and fill it in. Both configs use t
 - Connect the adapter only to the boiler's low-voltage room-thermostat / OpenTherm terminals. **Never to 230 V.**
 - Before the first test, write down the boiler's current settings and keep the old thermostat or relay wiring ready to put back.
 
+## Compatibility
+
+| Boiler | Status | Notes |
+|---|---|---|
+| ACV ILEA 18/25 (Atlantic Naia 2 platform) | 🟡 WIP: OpenTherm expected from the manual, not yet tested | [boilers/acv-ilea](boilers/acv-ilea/README.md) |
+
+Tested another boiler? Add a row, see below.
+
 ## Adding a boiler
 
 1. Create `boilers/<brand-model>/README.md` with the terminals, how to confirm OpenTherm on that boiler and the scan results.
