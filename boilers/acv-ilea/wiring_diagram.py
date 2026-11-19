@@ -5,11 +5,11 @@ import sys
 T = {
     "en": dict(
         title="ACV ILEA – where to connect the OpenTherm adapter",
-        box="Boiler electrical box (front panel off, box lowered)",
+        box="Boiler electrical box\n(front panel off, box lowered)",
         selv="SELV terminal block (low voltage)",
         floor="Underfloor\nsafety", outdoor="Outdoor\nsensor 10 kΩ", z2="Z2\nzone 2", z1="Z1\nzone 1",
         jumper="jumper", remove="remove jumper /\nold relay wires",
-        lv="230 V block (LV) – DO NOT CONNECT ANYTHING HERE",
+        lv="230 V block (LV)\nDO NOT CONNECT ANYTHING HERE",
         cable="2-core cable 2×0.5–1.5 mm²\nany polarity",
         adapter="OpenTherm adapter", bside="boiler side", eside="ESP32 side", iso="isolation gap",
         esp="ESP32 DevKit", usb="USB", psu="5 V USB power supply",
@@ -25,11 +25,11 @@ T = {
     ),
     "pl": dict(
         title="ACV ILEA – gdzie podłączyć adapter OpenTherm",
-        box="Skrzynka elektryczna kotła (płyta przednia zdjęta, skrzynka opuszczona)",
+        box="Skrzynka elektryczna kotła\n(płyta przednia zdjęta, skrzynka opuszczona)",
         selv="Listwa SELV (bardzo niskie napięcie)",
         floor="Zabezp.\npodłogówki", outdoor="Czujnik\nzewn. 10 kΩ", z2="Z2\nstrefa 2", z1="Z1\nstrefa 1",
         jumper="mostek", remove="zdjąć mostek /\nprzewody przekaźnika",
-        lv="Listwa 230 V (LV) – NICZEGO TU NIE PODŁĄCZAĆ",
+        lv="Listwa 230 V (LV)\nNICZEGO TU NIE PODŁĄCZAĆ",
         cable="przewód 2-żyłowy 2×0,5–1,5 mm²\npolaryzacja dowolna",
         adapter="Adapter OpenTherm", bside="strona kotła", eside="strona ESP32", iso="przerwa izolacyjna",
         esp="ESP32 DevKit", usb="USB", psu="zasilacz USB 5 V",
@@ -79,17 +79,17 @@ def build(lang):
 
     # boiler electrical box
     o.append('<rect x="30" y="70" width="470" height="420" rx="12" fill="#f4f5f7" stroke="#9aa3ad" stroke-width="2"/>')
-    o.append(text(50, 96, t["box"], 12.5, "start", 600, "#4b5563"))
+    o.append(text(50, 94, t["box"], 12, "start", 600, "#4b5563", lh=15))
 
     # SELV block
-    o.append(text(60, 136, t["selv"], 13, "start", 700, "#1d5234"))
+    o.append(text(60, 140, t["selv"], 13, "start", 700, "#1d5234"))
     o.append('<rect x="60" y="210" width="370" height="74" rx="6" fill="#e3efe7" stroke="#2f7d4f" stroke-width="1.5"/>')
     xs = [100, 140, 180, 220, 280, 320, 370, 410]
     for x in xs:
         o.append(screw(x, 247))
     labels = [(120, t["floor"], "#4b5563"), (200, t["outdoor"], "#4b5563"), (300, t["z2"], "#1f2a24"), (390, t["z1"], "#b42318")]
     for x, s, c in labels:
-        o.append(text(x, 160, s, 12, "middle", 700 if s.startswith("Z") else 500, c))
+        o.append(text(x, 160, s, 11, "middle", 700 if s.startswith("Z") else 500, c))
     # pair dividers
     for x in (160, 250, 345):
         o.append(f'<line x1="{x}" y1="214" x2="{x}" y2="280" stroke="#2f7d4f" stroke-dasharray="3 3"/>')
@@ -107,7 +107,7 @@ def build(lang):
              '<rect width="10" height="10" fill="#fdecea"/><line x1="0" y1="0" x2="0" y2="10" stroke="#f5b5ad" stroke-width="4"/></pattern></defs>')
     o.append('<rect x="60" y="410" width="370" height="56" rx="6" fill="url(#hatch)" stroke="#b42318" stroke-width="1.5"/>')
     o.append('<path d="M84,452 l12,-22 l12,22 z" fill="#b42318"/><text x="96" y="449" font-size="13" text-anchor="middle" font-weight="800" fill="#fff" ' + FONT + '>!</text>')
-    o.append(text(118, 443, t["lv"], 12, "start", 700, "#b42318"))
+    o.append(text(122, 433, t["lv"], 12, "start", 700, "#b42318", lh=16))
 
     # wires Z1 -> adapter J1
     w1 = "M370,226 L370,190 L540,190 L540,262 L606,262"
@@ -156,8 +156,8 @@ def build(lang):
     # USB
     o.append('<rect x="944" y="410" width="32" height="18" rx="3" fill="#9aa3ad" stroke="#4b5563"/>')
     o.append('<path d="M960,428 L960,470" stroke="#111827" stroke-width="5" stroke-linecap="round"/>')
-    o.append('<rect x="890" y="470" width="140" height="40" rx="8" fill="#ffffff" stroke="#374151" stroke-width="1.5"/>')
-    o.append(text(960, 495, t["psu"], 12, "middle", 600))
+    o.append('<rect x="878" y="470" width="156" height="40" rx="8" fill="#ffffff" stroke="#374151" stroke-width="1.5"/>')
+    o.append(text(956, 494, t["psu"], 11.5, "middle", 600))
 
     # steps
     o.append('<rect x="30" y="530" width="980" height="148" rx="10" fill="#f7f8fa" stroke="#d6dbe1"/>')
