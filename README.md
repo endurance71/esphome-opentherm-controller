@@ -98,7 +98,7 @@ Copy `secrets.example.yaml` to `secrets.yaml` and fill it in. Both configs use t
 
 | Boiler | Status | Notes |
 |---|---|---|
-| ACV ILEA 18/25 (Atlantic Naia 2 platform) | 🟡 WIP: OpenTherm expected from the manual, not yet tested | [boilers/acv-ilea](boilers/acv-ilea/README.md) |
+| ACV ILEA 18/25 (Atlantic Naia 2 platform) | 🟡 WIP: OpenTherm expected from the manual, not yet tested | [notes](boilers/acv-ilea/README.md) · [wiring diagram](boilers/acv-ilea/wiring.svg) |
 
 Tested another boiler? Add a row, see below.
 

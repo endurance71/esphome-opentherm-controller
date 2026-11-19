@@ -50,6 +50,10 @@ Legend: 🟢 confirmed · 🟡 expected from the documentation · ⚪ unknown, t
 
 ## Terminals (SELV block)
 
+![Where to connect the OpenTherm adapter on the ACV ILEA](wiring.svg)
+
+Regenerate the drawing with `python3 boilers/acv-ilea/wiring_diagram.py en boilers/acv-ilea/wiring.svg`.
+
 The SELV terminal block sits under the front panel. Remove the front panel, unlock the electrical box and lower it (manual p. 26, fig. 21). From left to right:
 
 | Position | Function |
