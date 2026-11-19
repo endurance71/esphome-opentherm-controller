@@ -1,16 +1,16 @@
-# OpenTherm – konfiguracja DIAGNOSTYCZNA (pełny odczyt OpenTherm)
-# Pierwszy test z nowym kotłem. Przygotowana pod ACV ILEA (boilers/acv-ilea/), działa z każdym kotłem OpenTherm.
-# ESP32-WROOM + adapter OpenTherm: GPIO21 = RX (wejście), GPIO22 = TX (wyjście)
+# OpenTherm – DIAGNOSTIC config (full OpenTherm read-out)
+# First test with a new boiler. Prepared for the ACV ILEA (boilers/acv-ilea/), works with any OpenTherm boiler.
+# ESP32-WROOM + OpenTherm adapter: GPIO21 = RX (input), GPIO22 = TX (output)
 #
-# Bezpieczne ustawienia na czas testu:
-#  - Grzanie CO startuje WYŁĄCZONE (włączysz je ręcznie w Home Assistant)
-#  - Grzanie CWU włączone (ciepła woda w kranie działa)
-#  - Zapisywana jest tylko temperatura zasilania CO (domyślnie 40 °C);
-#    temperatura CWU i max CO są tylko ODCZYTYWANE, nic ich nie nadpisuje.
+# Safe settings for the test:
+#  - Central heating starts OFF (turn it on by hand in Home Assistant)
+#  - Domestic hot water stays ON (hot water at the tap keeps working)
+#  - Only the CH flow setpoint is written (default 40 °C);
+#    the DHW setpoint and max CH setpoint are READ only, nothing overwrites them.
 
 substitutions:
-  name: opentherm-boiler          # ta sama nazwa w konfiguracji docelowej → podmiana przez OTA
-  friendly_name: Kocioł
+  name: opentherm-boiler          # same name as the target config → replaced over OTA
+  friendly_name: Boiler
 
 esphome:
   name: ${name}
@@ -20,12 +20,12 @@ esp32:
   board: esp32dev
 
 logger:
-  level: DEBUG          # w logach widać typ każdej odpowiedzi kotła
+  level: DEBUG          # the logs show the boiler's response type for every message
 
-api:                  # sekrety: zobacz secrets.example.yaml
+api:                  # secrets: see secrets.example.yaml
   encryption:
     key: !secret api_key
-  reboot_timeout: 0s    # bez restartów, gdy HA nie odpowiada
+  reboot_timeout: 0s    # no reboots when HA does not respond
 
 ota:
   - platform: esphome
@@ -34,7 +34,7 @@ ota:
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
-  ap:                   # hotspot awaryjny, gdy Wi-Fi nie działa (strona z wyborem sieci)
+  ap:                   # fallback hotspot when Wi-Fi fails (network selection page)
     ssid: "${name}"
     password: !secret ap_password
 
@@ -44,154 +44,154 @@ opentherm:
   in_pin: GPIO21
   out_pin: GPIO22
 
-# ---------- STEROWANIE ----------
+# ---------- CONTROL ----------
 switch:
   - platform: opentherm
     ch_enable:
-      name: "Grzanie CO"
+      name: "Central heating"
       restore_mode: ALWAYS_OFF
     dhw_enable:
-      name: "Grzanie CWU"
+      name: "Domestic hot water"
       restore_mode: ALWAYS_ON
 
 number:
   - platform: opentherm
     t_set:
-      name: "Zadana temperatura zasilania CO"
+      name: "CH flow setpoint"
       min_value: 20
       max_value: 60
       step: 0.5
       initial_value: 40
       restore_value: true
 
-# ---------- ODCZYTY ----------
+# ---------- READINGS ----------
 sensor:
   - platform: opentherm
     t_boiler:
-      name: "Temperatura zasilania"
+      name: "Flow temperature"
     t_ret:
-      name: "Temperatura powrotu"
+      name: "Return temperature"
     t_dhw:
-      name: "Temperatura CWU"
+      name: "DHW temperature"
     t_outside:
-      name: "Temperatura zewnętrzna (kocioł)"
+      name: "Outdoor temperature (boiler)"
     t_exhaust:
-      name: "Temperatura spalin"
+      name: "Flue gas temperature"
     t_flow_ch2:
-      name: "Temperatura zasilania obieg 2"
+      name: "Flow temperature circuit 2"
     t_dhw2:
-      name: "Temperatura CWU 2"
+      name: "DHW temperature 2"
     t_storage:
-      name: "Temperatura zasobnika solarnego"
+      name: "Solar storage temperature"
     t_collector:
-      name: "Temperatura kolektora solarnego"
+      name: "Solar collector temperature"
     ch_pressure:
-      name: "Ciśnienie instalacji"
+      name: "System pressure"
     dhw_flow_rate:
-      name: "Przepływ CWU"
+      name: "DHW flow rate"
     rel_mod_level:
-      name: "Modulacja palnika"
+      name: "Burner modulation"
     fan_speed:
-      name: "Obroty wentylatora"
+      name: "Fan speed"
     fan_speed_setpoint:
-      name: "Obroty wentylatora zadane"
+      name: "Fan speed setpoint"
     flame_current:
-      name: "Prąd jonizacji"
+      name: "Flame current"
     burner_starts:
-      name: "Starty palnika"
+      name: "Burner starts"
     ch_pump_starts:
-      name: "Starty pompy CO"
+      name: "CH pump starts"
     dhw_pump_valve_starts:
-      name: "Starty pompy lub zaworu CWU"
+      name: "DHW pump or valve starts"
     dhw_burner_starts:
-      name: "Starty palnika na CWU"
+      name: "DHW burner starts"
     burner_operation_hours:
-      name: "Godziny pracy palnika"
+      name: "Burner operation hours"
     ch_pump_operation_hours:
-      name: "Godziny pracy pompy CO"
+      name: "CH pump operation hours"
     dhw_pump_valve_operation_hours:
-      name: "Godziny pracy pompy lub zaworu CWU"
+      name: "DHW pump or valve operation hours"
     dhw_burner_operation_hours:
-      name: "Godziny pracy palnika na CWU"
+      name: "DHW burner operation hours"
     t_dhw_set:
-      name: "Zadana temperatura CWU (odczyt)"
+      name: "DHW setpoint (read)"
     max_t_set:
-      name: "Max temperatura CO (odczyt)"
+      name: "Max CH setpoint (read)"
     t_dhw_set_ub:
-      name: "Zakres CWU – max"
+      name: "DHW setpoint range – max"
     t_dhw_set_lb:
-      name: "Zakres CWU – min"
+      name: "DHW setpoint range – min"
     max_t_set_ub:
-      name: "Zakres max CO – max"
+      name: "Max CH setpoint range – max"
     max_t_set_lb:
-      name: "Zakres max CO – min"
+      name: "Max CH setpoint range – min"
     otc_hc_ratio_ub:
-      name: "Krzywa grzewcza – max"
+      name: "Heating curve ratio – max"
     otc_hc_ratio_lb:
-      name: "Krzywa grzewcza – min"
+      name: "Heating curve ratio – min"
     opentherm_version_device:
-      name: "Wersja OpenTherm kotła"
+      name: "Boiler OpenTherm version"
     device_type:
-      name: "Typ urządzenia"
+      name: "Device type"
     device_version:
-      name: "Wersja urządzenia"
+      name: "Device version"
     device_id:
-      name: "ID producenta (MemberID)"
+      name: "Manufacturer ID (MemberID)"
 
 binary_sensor:
   - platform: opentherm
-    # stan pracy
+    # operating state
     flame_on:
-      name: "Płomień"
+      name: "Flame"
     ch_active:
-      name: "Grzanie CO aktywne"
+      name: "Central heating active"
     dhw_active:
-      name: "Grzanie CWU aktywne"
+      name: "Hot water active"
     fault_indication:
-      name: "Awaria"
+      name: "Fault"
     diagnostic_indication:
-      name: "Komunikat serwisowy"
+      name: "Diagnostic indication"
     cooling_active:
-      name: "Chłodzenie aktywne"
+      name: "Cooling active"
     ch2_active:
-      name: "Obieg 2 aktywny"
+      name: "Circuit 2 active"
     electricity_production:
-      name: "Produkcja prądu"
-    # konfiguracja kotła (co obsługuje i co da się zapisywać)
+      name: "Electricity production"
+    # boiler configuration (what it supports and what can be written)
     dhw_present:
-      name: "Ma CWU"
+      name: "Has DHW"
     control_type_on_off:
-      name: "Sterowanie tylko włącz-wyłącz"
+      name: "On/off control only"
     cooling_supported:
-      name: "Obsługuje chłodzenie"
+      name: "Supports cooling"
     dhw_storage_tank:
-      name: "CWU z zasobnika"
+      name: "DHW storage tank"
     controller_pump_control_allowed:
-      name: "Sterowanie pompą dozwolone"
+      name: "Pump control allowed"
     ch2_present:
-      name: "Ma obieg 2"
+      name: "Has circuit 2"
     water_filling:
-      name: "Napełnianie wody"
+      name: "Water filling"
     heat_mode:
-      name: "Tryb grzania"
+      name: "Heat mode"
     dhw_setpoint_transfer_enabled:
-      name: "Zadana CWU – transfer dostępny"
+      name: "DHW setpoint – transfer enabled"
     max_ch_setpoint_transfer_enabled:
-      name: "Max CO – transfer dostępny"
+      name: "Max CH setpoint – transfer enabled"
     dhw_setpoint_rw:
-      name: "Zadana CWU – można zapisywać"
+      name: "DHW setpoint – writable"
     max_ch_setpoint_rw:
-      name: "Max CO – można zapisywać"
-    # błędy
+      name: "Max CH setpoint – writable"
+    # faults
     service_request:
-      name: "Wymagany serwis"
+      name: "Service required"
     lockout_reset:
-      name: "Blokada – wymaga resetu"
+      name: "Lockout – reset required"
     low_water_pressure:
-      name: "Niskie ciśnienie wody"
+      name: "Low water pressure"
     flame_fault:
-      name: "Błąd płomienia"
+      name: "Flame fault"
     air_pressure_fault:
-      name: "Błąd ciśnienia powietrza"
+      name: "Air pressure fault"
     water_over_temp:
-      name: "Przegrzanie wody"
+      name: "Water overtemperature"

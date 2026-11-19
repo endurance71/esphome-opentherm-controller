@@ -56,7 +56,7 @@ These are safety extra-low-voltage terminals. Never connect anything to the 230 
 3. Measure the DC voltage on the free Z1 terminals with the boiler on. Roughly 15–24 V is a good sign but not proof.
 4. Flash `opentherm-diagnostic.yaml`, connect the adapter to terminals 1–2 with the boiler off, then turn the boiler on. The LEDs should blink.
 5. Record which entities get values, and save the logs with the response types (`READ_ACK`, `DATA_INVALID`, `UNKNOWN_DATAID`).
-6. Control test: turn „Grzanie CO” on and set `t_set` to 40 °C. Expected: flame on, modulation > 0, flow temperature rising.
+6. Control test: turn "Central heating" on and set "CH flow setpoint" to 40 °C. Expected: flame on, modulation > 0, flow temperature rising.
 7. Failure test: disconnect the ESP32 for a few minutes and see what the boiler does (fallback mode or its own control).
 8. Afterwards, either restore the old on/off control or switch to `opentherm-weather-curve.yaml`.
 

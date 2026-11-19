@@ -1,20 +1,20 @@
 /*
-  OpenThermScanner – pełny odczyt tego, co wystawia kocioł po OpenTherm
-  ESP32-WROOM + adapter OpenTherm (układ Ihora Melnyka)
+  OpenThermScanner – full read-out of everything the boiler exposes over OpenTherm
+  ESP32-WROOM + OpenTherm adapter (Ihor Melnyk's circuit)
 
-  Co robi:
-   1. Wyłącza grzanie CO na czas skanu (CWU zostaje włączona, ciepła woda w kranie działa).
-   2. Czyta wszystkie numery danych OpenTherm 1–255 i zapisuje odpowiedź kotła:
-      READ-ACK (obsługuje), UNKNOWN-DATAID (nie zna), DATA-INVALID (zna, ale brak danych), brak odpowiedzi.
-   3. Sprawdza, które wartości kocioł pozwala ZAPISAĆ – tylko bezpieczne testy
-      (temperatura zasilania przy wyłączonym CO, wpisanie z powrotem tych samych wartości CWU i max CO, moc 100%).
-   4. Czyta parametry producenta (TSP) i historię błędów (FHB), jeśli kocioł je udostępnia.
-   5. Po skanie PRZESTAJE rozmawiać z kotłem. Odłącz wtedy adapter i podłącz z powrotem stare sterowanie.
+  What it does:
+   1. Turns central heating OFF for the scan (DHW stays on, hot water at the tap keeps working).
+   2. Reads every OpenTherm data ID 1–255 and records the boiler's answer:
+      READ-ACK (supported), UNKNOWN-DATAID (not known), DATA-INVALID (known, but no data), no answer.
+   3. Checks which values the boiler lets you WRITE – safe tests only
+      (flow setpoint with CH off, writing back the same DHW and max CH values, max modulation 100%).
+   4. Reads the manufacturer parameters (TSP) and fault history (FHB), if the boiler exposes them.
+   5. After the scan it STOPS talking to the boiler. Then disconnect the adapter and reconnect the old control.
 
-  Wyniki: Serial Monitor (115200) oraz strona http://<IP ESP32>/ w sieci Wi-Fi.
+  Results: Serial Monitor (115200) and the page http://<ESP32 IP>/ on your Wi-Fi.
 
-  Biblioteka: "OpenTherm Library" Ihor Melnyk (Menedżer bibliotek Arduino), wersja 1.1.5 lub nowsza.
-  Płytka: "ESP32 Dev Module".
+  Library: "OpenTherm Library" by Ihor Melnyk (Arduino Library Manager), version 1.1.5 or newer.
+  Board: "ESP32 Dev Module".
 */
 
 #include <Arduino.h>
@@ -22,11 +22,11 @@
 #include <WebServer.h>
 #include <OpenTherm.h>
 
-// ---------- USTAWIENIA ----------
-const char *WIFI_SSID = "TWOJA_SIEC";
-const char *WIFI_PASS = "TWOJE_HASLO";
-const int OT_IN_PIN = 21;   // GPIO21 <- RX adaptera (U2)
-const int OT_OUT_PIN = 22;  // GPIO22 -> TX adaptera (U1)
+// ---------- SETTINGS ----------
+const char *WIFI_SSID = "YOUR_WIFI";
+const char *WIFI_PASS = "YOUR_PASSWORD";
+const int OT_IN_PIN = 21;   // GPIO21 <- adapter RX (U2)
+const int OT_OUT_PIN = 22;  // GPIO22 -> adapter TX (U1)
 // --------------------------------
 
 OpenTherm ot(OT_IN_PIN, OT_OUT_PIN);
@@ -52,20 +52,20 @@ struct WriteTest {
 };
 
 WriteTest writes[] = {
-  {1,   "Temperatura zasilania CO (TSet) = 30,0 °C, przy wylaczonym CO", 0, R_NONE, 0, false, false},
-  {56,  "Temperatura CWU – wpisanie z powrotem odczytanej wartosci",    0, R_NONE, 0, false, false},
-  {57,  "Max temperatura CO – wpisanie z powrotem odczytanej wartosci", 0, R_NONE, 0, false, false},
-  {14,  "Max modulacja palnika = 100 %",                                0, R_NONE, 0, false, false},
-  {16,  "Zadana temperatura pokoju (informacyjnie) = 20,0 °C",          0, R_NONE, 0, false, false},
-  {24,  "Temperatura pokoju (informacyjnie) = 21,0 °C",                 0, R_NONE, 0, false, false},
-  {2,   "Konfiguracja mastera / MemberID = 0",                          0, R_NONE, 0, false, false},
-  {124, "Wersja OpenTherm mastera = 2.2",                               0, R_NONE, 0, false, false},
-  {126, "Typ / wersja produktu mastera = 0 / 1",                        0, R_NONE, 0, false, false},
+  {1,   "CH flow setpoint (TSet) = 30.0 °C, with CH off", 0, R_NONE, 0, false, false},
+  {56,  "DHW setpoint – write back the value read",            0, R_NONE, 0, false, false},
+  {57,  "Max CH setpoint – write back the value read", 0, R_NONE, 0, false, false},
+  {14,  "Max burner modulation = 100 %",                       0, R_NONE, 0, false, false},
+  {16,  "Room setpoint (informative) = 20.0 °C",               0, R_NONE, 0, false, false},
+  {24,  "Room temperature (informative) = 21.0 °C",            0, R_NONE, 0, false, false},
+  {2,   "Master configuration / MemberID = 0",                 0, R_NONE, 0, false, false},
+  {124, "Master OpenTherm version = 2.2",                      0, R_NONE, 0, false, false},
+  {126, "Master product type / version = 0 / 1",               0, R_NONE, 0, false, false},
 };
 const int WRITE_COUNT = sizeof(writes) / sizeof(writes[0]);
 
 uint16_t tspValues[256];
-int tspCount = -1;   // -1 = nieobsługiwane / nieznane
+int tspCount = -1;   // -1 = unsupported / unknown
 uint16_t fhbValues[256];
 int fhbCount = -1;
 
@@ -77,80 +77,80 @@ Phase phase = PH_WAIT;
 int cursor = 1;
 int sinceStatus = 0;
 unsigned long bootMs = 0;
-String report;  // gotowy raport tekstowy
+String report;  // finished text report
 
-// ---------- opis numerów danych ----------
+// ---------- data ID descriptions ----------
 const char *idName(uint8_t id) {
   switch (id) {
-    case 0:   return "Status master/slave (flagi)";
-    case 1:   return "Zadana temp. zasilania CO (TSet)";
-    case 2:   return "Konfiguracja mastera / MemberID";
-    case 3:   return "Konfiguracja kotla / MemberID";
-    case 4:   return "Zdalne polecenie (np. reset)";
-    case 5:   return "Flagi bledow + kod bledu OEM";
-    case 6:   return "Zdalne parametry: dostep";
-    case 7:   return "Sygnal chlodzenia";
-    case 8:   return "Zadana temp. CO obieg 2";
-    case 9:   return "Zdalne nadpisanie temp. pokoju";
-    case 10:  return "Liczba parametrow producenta (TSP)";
-    case 11:  return "Parametr producenta (TSP) indeks/wartosc";
-    case 12:  return "Rozmiar historii bledow (FHB)";
-    case 13:  return "Historia bledow (FHB) indeks/wartosc";
-    case 14:  return "Max modulacja palnika (ustawienie)";
-    case 15:  return "Max moc kotla kW / min modulacja %";
-    case 16:  return "Zadana temp. pokoju (od termostatu)";
-    case 17:  return "Aktualna modulacja palnika %";
-    case 18:  return "Cisnienie instalacji CO (bar)";
-    case 19:  return "Przeplyw CWU (l/min)";
-    case 20:  return "Dzien tygodnia i godzina";
-    case 21:  return "Data";
-    case 22:  return "Rok";
-    case 23:  return "Zadana temp. pokoju obieg 2";
-    case 24:  return "Temperatura pokoju (od termostatu)";
-    case 25:  return "Temperatura zasilania (kociol)";
-    case 26:  return "Temperatura CWU";
-    case 27:  return "Temperatura zewnetrzna";
-    case 28:  return "Temperatura powrotu";
-    case 29:  return "Temperatura zasobnika solarnego";
-    case 30:  return "Temperatura kolektora solarnego";
-    case 31:  return "Temperatura zasilania obieg 2";
-    case 32:  return "Temperatura CWU 2";
-    case 33:  return "Temperatura spalin";
-    case 34:  return "Temperatura wymiennika kotla";
-    case 35:  return "Obroty wentylatora zadane/aktualne";
-    case 36:  return "Prad plomienia (jonizacja) uA";
-    case 37:  return "Temperatura pokoju obieg 2";
-    case 38:  return "Wilgotnosc wzgledna";
-    case 48:  return "Zakres temp. CWU (max/min)";
-    case 49:  return "Zakres max temp. CO (max/min)";
-    case 50:  return "Zakres krzywej grzewczej";
-    case 56:  return "Zadana temp. CWU";
-    case 57:  return "Max temp. zasilania CO";
-    case 58:  return "Wspolczynnik krzywej grzewczej";
-    case 70:  return "Wentylacja: status";
-    case 71:  return "Wentylacja: poziom zadany";
-    case 99:  return "Tryb pracy CO/CWU (OT 4.x)";
-    case 100: return "Zdalne nadpisanie: funkcje";
-    case 101: return "Status solarny";
-    case 102: return "Solar: flagi bledow";
-    case 113: return "Licznik nieudanych zaplonow";
-    case 114: return "Licznik zaniku plomienia";
-    case 115: return "Kod diagnostyczny OEM";
-    case 116: return "Licznik uruchomien palnika";
-    case 117: return "Licznik uruchomien pompy CO";
-    case 118: return "Licznik uruchomien pompy/zaworu CWU";
-    case 119: return "Licznik uruchomien palnika na CWU";
-    case 120: return "Godziny pracy palnika";
-    case 121: return "Godziny pracy pompy CO";
-    case 122: return "Godziny pracy pompy/zaworu CWU";
-    case 123: return "Godziny pracy palnika na CWU";
-    case 124: return "Wersja OpenTherm mastera";
-    case 125: return "Wersja OpenTherm kotla";
-    case 126: return "Typ/wersja produktu mastera";
-    case 127: return "Typ/wersja produktu kotla";
+    case 0:   return "Master/slave status (flags)";
+    case 1:   return "CH flow setpoint (TSet)";
+    case 2:   return "Master configuration / MemberID";
+    case 3:   return "Boiler configuration / MemberID";
+    case 4:   return "Remote command (e.g. reset)";
+    case 5:   return "Fault flags + OEM fault code";
+    case 6:   return "Remote parameters: access";
+    case 7:   return "Cooling control signal";
+    case 8:   return "CH2 flow setpoint";
+    case 9:   return "Remote room setpoint override";
+    case 10:  return "Number of manufacturer parameters (TSP)";
+    case 11:  return "Manufacturer parameter (TSP) index/value";
+    case 12:  return "Fault history size (FHB)";
+    case 13:  return "Fault history (FHB) index/value";
+    case 14:  return "Max burner modulation (setting)";
+    case 15:  return "Max boiler capacity kW / min modulation %";
+    case 16:  return "Room setpoint (from thermostat)";
+    case 17:  return "Current burner modulation %";
+    case 18:  return "CH water pressure (bar)";
+    case 19:  return "DHW flow rate (l/min)";
+    case 20:  return "Day of week and time";
+    case 21:  return "Date";
+    case 22:  return "Year";
+    case 23:  return "Room setpoint circuit 2";
+    case 24:  return "Room temperature (from thermostat)";
+    case 25:  return "Flow temperature (boiler)";
+    case 26:  return "DHW temperature";
+    case 27:  return "Outdoor temperature";
+    case 28:  return "Return temperature";
+    case 29:  return "Solar storage temperature";
+    case 30:  return "Solar collector temperature";
+    case 31:  return "Flow temperature circuit 2";
+    case 32:  return "DHW temperature 2";
+    case 33:  return "Flue gas temperature";
+    case 34:  return "Boiler heat exchanger temperature";
+    case 35:  return "Fan speed setpoint/actual";
+    case 36:  return "Flame current (ionisation) uA";
+    case 37:  return "Room temperature circuit 2";
+    case 38:  return "Relative humidity";
+    case 48:  return "DHW setpoint range (max/min)";
+    case 49:  return "Max CH setpoint range (max/min)";
+    case 50:  return "Heating curve ratio range";
+    case 56:  return "DHW setpoint";
+    case 57:  return "Max CH flow setpoint";
+    case 58:  return "Heating curve ratio";
+    case 70:  return "Ventilation: status";
+    case 71:  return "Ventilation: setpoint";
+    case 99:  return "CH/DHW operating mode (OT 4.x)";
+    case 100: return "Remote override: functions";
+    case 101: return "Solar status";
+    case 102: return "Solar: fault flags";
+    case 113: return "Unsuccessful burner starts";
+    case 114: return "Flame signal too low count";
+    case 115: return "OEM diagnostic code";
+    case 116: return "Burner starts";
+    case 117: return "CH pump starts";
+    case 118: return "DHW pump/valve starts";
+    case 119: return "DHW burner starts";
+    case 120: return "Burner operation hours";
+    case 121: return "CH pump operation hours";
+    case 122: return "DHW pump/valve operation hours";
+    case 123: return "DHW burner operation hours";
+    case 124: return "Master OpenTherm version";
+    case 125: return "Boiler OpenTherm version";
+    case 126: return "Master product type/version";
+    case 127: return "Boiler product type/version";
     default:
-      if (id >= 128) return "Numer producenta (OEM)";
-      return "Inny / rzadko uzywany";
+      if (id >= 128) return "Manufacturer-specific (OEM)";
+      return "Other / rarely used";
   }
 }
 
@@ -204,15 +204,15 @@ String decode(uint8_t id, uint16_t v) {
 const char *resName(Res r) {
   switch (r) {
     case R_ACK:     return "OK";
-    case R_UNKNOWN: return "nie zna";
-    case R_INVALID: return "brak danych";
-    case R_TIMEOUT: return "brak odpowiedzi";
-    case R_BAD:     return "zla ramka";
+    case R_UNKNOWN: return "unknown";
+    case R_INVALID: return "invalid";
+    case R_TIMEOUT: return "no answer";
+    case R_BAD:     return "bad frame";
     default:        return "-";
   }
 }
 
-// ---------- komunikacja ----------
+// ---------- communication ----------
 Res classify(unsigned long resp, uint16_t &value) {
   OpenThermResponseStatus st = ot.getLastResponseStatus();
   if (st == OpenThermResponseStatus::TIMEOUT) return R_TIMEOUT;
@@ -229,12 +229,12 @@ Res request(OpenThermMessageType type, uint8_t id, uint16_t data, uint16_t &valu
   unsigned long req = OpenTherm::buildRequest(type, (OpenThermMessageID)id, data);
   unsigned long resp = ot.sendRequest(req);
   Res r = classify(resp, value);
-  delay(120);  // przerwa wymagana miedzy ramkami
+  delay(120);  // required gap between frames
   return r;
 }
 
 void keepStatus() {
-  // CO wylaczone, CWU wlaczona – kociol nie grzeje grzejnikow w trakcie skanu
+  // CH off, DHW on – the boiler does not heat the radiators during the scan
   unsigned long resp = ot.setBoilerStatus(false, true, false, false, false);
   uint16_t v = 0;
   statusRes = classify(resp, v);
@@ -245,16 +245,16 @@ void keepStatus() {
 
 uint16_t f88(float t) { return (uint16_t)(int16_t)(t * 256.0f); }
 
-// ---------- raport ----------
+// ---------- report ----------
 void buildReport() {
   String s;
-  s += "=== OpenTherm skan kotla ===\n";
-  s += "Status (ID0): " + String(resName(statusRes)) + "  flagi kotla: " + bin8(statusResponse & 0xFF) + "\n";
-  s += "  bit0 blad=" + String(statusResponse & 1) + " bit1 CO=" + String((statusResponse >> 1) & 1) +
-       " bit2 CWU=" + String((statusResponse >> 2) & 1) + " bit3 plomien=" + String((statusResponse >> 3) & 1) +
-       " bit6 diagnostyka=" + String((statusResponse >> 6) & 1) + "\n\n";
-  s += "--- Odczyt (tylko obslugiwane i 'brak danych') ---\n";
-  s += "ID  | wynik       | HEX  | wartosc | opis\n";
+  s += "=== OpenTherm boiler scan ===\n";
+  s += "Status (ID0): " + String(resName(statusRes)) + "  boiler flags: " + bin8(statusResponse & 0xFF) + "\n";
+  s += "  bit0 fault=" + String(statusResponse & 1) + " bit1 CH=" + String((statusResponse >> 1) & 1) +
+       " bit2 DHW=" + String((statusResponse >> 2) & 1) + " bit3 flame=" + String((statusResponse >> 3) & 1) +
+       " bit6 diagnostic=" + String((statusResponse >> 6) & 1) + "\n\n";
+  s += "--- Read (supported and 'invalid' only) ---\n";
+  s += "ID  | result      | HEX  | value   | description\n";
   int ok = 0, unk = 0, inv = 0, to = 0;
   for (int id = 1; id < 256; id++) {
     Probe &p = readRes[id];
@@ -269,37 +269,37 @@ void buildReport() {
       s += line;
     }
   }
-  s += "\nPodsumowanie: OK=" + String(ok) + "  brak danych=" + String(inv) + "  nie zna=" + String(unk) +
-       "  bez odpowiedzi=" + String(to) + "\n\n";
-  s += "--- Test zapisu ---\n";
+  s += "\nSummary: OK=" + String(ok) + "  invalid=" + String(inv) + "  unknown=" + String(unk) +
+       "  no answer=" + String(to) + "\n\n";
+  s += "--- Write test ---\n";
   for (int i = 0; i < WRITE_COUNT; i++) {
     WriteTest &w = writes[i];
-    s += "ID" + String(w.id) + ": " + (w.skipped ? String("pominiety (brak odczytu)") : String(resName(w.res))) +
-         "  wyslano " + hex4(w.sent) + "  | " + w.what + "\n";
+    s += "ID" + String(w.id) + ": " + (w.skipped ? String("skipped (no read value)") : String(resName(w.res))) +
+         "  sent " + hex4(w.sent) + "  | " + w.what + "\n";
   }
-  s += "\n--- Parametry producenta (TSP) ---\n";
-  if (tspCount < 0) s += "nieobslugiwane\n";
+  s += "\n--- Manufacturer parameters (TSP) ---\n";
+  if (tspCount < 0) s += "unsupported\n";
   else for (int i = 0; i < tspCount; i++) s += "TSP[" + String(i) + "] = " + String(tspValues[i] & 0xFF) + "\n";
-  s += "\n--- Historia bledow (FHB) ---\n";
-  if (fhbCount < 0) s += "nieobslugiwane\n";
+  s += "\n--- Fault history (FHB) ---\n";
+  if (fhbCount < 0) s += "unsupported\n";
   else for (int i = 0; i < fhbCount; i++) s += "FHB[" + String(i) + "] = " + String(fhbValues[i] & 0xFF) + "\n";
-  s += "\nSkan zakonczony. ESP32 nie rozmawia juz z kotlem: odlacz adapter i podlacz stare sterowanie.\n";
+  s += "\nScan finished. The ESP32 no longer talks to the boiler: disconnect the adapter and reconnect the old control.\n";
   report = s;
 }
 
 void handleRoot() {
   String h;
   h.reserve(report.length() + 2000);
-  h += F("<!DOCTYPE html><html lang='pl'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
-         "<title>OpenTherm skan</title><style>body{font-family:system-ui;margin:16px;background:#f4f6f5;color:#17201c}"
+  h += F("<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
+         "<title>OpenTherm scan</title><style>body{font-family:system-ui;margin:16px;background:#f4f6f5;color:#17201c}"
          "pre{background:#fff;border:1px solid #ccd;padding:12px;overflow-x:auto;font-size:13px}"
-         "button{padding:10px 14px;font-size:15px}</style></head><body><h1>OpenTherm skan kotla</h1>");
+         "button{padding:10px 14px;font-size:15px}</style></head><body><h1>OpenTherm boiler scan</h1>");
   if (phase != PH_DONE) {
-    h += F("<p>Skan w toku... (odswiez za chwile) – faza: ");
+    h += F("<p>Scan in progress... (refreshes automatically) – phase: ");
     h += String((int)phase) + " / ID " + String(cursor) + "</p><meta http-equiv='refresh' content='5'>";
   } else {
-    h += F("<p>Gotowe. Skopiuj raport i wklej go Claude.</p>"
-           "<button onclick=\"navigator.clipboard.writeText(document.getElementById('r').innerText)\">Kopiuj raport</button>");
+    h += F("<p>Done. Copy the report and save it (or attach it to an issue).</p>"
+           "<button onclick=\"navigator.clipboard.writeText(document.getElementById('r').innerText)\">Copy report</button>");
   }
   h += F("<pre id='r'>");
   String esc = report;
@@ -321,16 +321,16 @@ void setup() {
   unsigned long t0 = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - t0 < 15000) delay(250);
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.print("Wi-Fi OK, otworz http://");
+    Serial.print("Wi-Fi OK, open http://");
     Serial.println(WiFi.localIP());
   } else {
-    Serial.println("Brak Wi-Fi – wyniki tylko w Serial Monitor");
+    Serial.println("No Wi-Fi – results in Serial Monitor only");
   }
   server.on("/", handleRoot);
   server.begin();
 
   ot.begin();
-  report = "Skan startuje za kilka sekund...\n";
+  report = "Scan starts in a few seconds...\n";
   bootMs = millis();
 }
 
@@ -362,7 +362,7 @@ void loop() {
         cursor = 0;
       }
       if (cursor % 16 == 0) {
-        report = "Odczyt w toku: ID " + String(cursor) + "/255\n";
+        report = "Reading: ID " + String(cursor) + "/255\n";
       }
       break;
     }
@@ -388,7 +388,7 @@ void loop() {
         uint16_t v = 0;
         w.res = request(OpenThermMessageType::WRITE_DATA, w.id, data, v);
         w.value = v;
-        Serial.printf("ZAPIS ID%-3d %s\n", w.id, resName(w.res));
+        Serial.printf("WRITE ID%-3d %s\n", w.id, resName(w.res));
       }
       w.done = true;
       keepStatus();
@@ -446,7 +446,7 @@ void loop() {
     }
 
     case PH_DONE:
-      // Koniec: brak dalszej komunikacji z kotlem.
+      // Done: no further communication with the boiler.
       break;
   }
 }

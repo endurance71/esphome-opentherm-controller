@@ -34,7 +34,7 @@ boilers/
   acv-ilea/                 notes for ACV ILEA (Atlantic Naia 2 platform)
 ```
 
-The docs are in English. The ESPHome entity names and the comments in the firmware are still in Polish, e.g. „Grzanie CO” is central heating and „Grzanie CWU” is domestic hot water. Open the HTML pages from a local clone, or with any static HTML preview.
+Docs, firmware comments and Home Assistant entity names are in English. Open the HTML pages from a local clone, or with any static HTML preview.
 
 ## Hardware
 
@@ -67,7 +67,7 @@ The docs are in English. The ESPHome entity names and the comments in the firmwa
    - Inputs come from Home Assistant: outdoor temperature, room temperature and the `temperature` attribute of a `climate` entity. Set them in `substitutions`.
    - The curve parameters are `number` entities that you can tune from Home Assistant.
    - **Without Home Assistant** the ESP does not reboot (`reboot_timeout: 0s`). After 10 minutes it keeps heating on the curve with the last known target. The outdoor temperature falls back to the boiler's sensor (ID 27), then to 0 °C.
-   - The template switch „Grzanie CO” is meant as the `heater` of an HA `generic_thermostat` with a wide hysteresis, which acts only as a safety cut-off.
+   - The template switch "Central heating" is meant as the `heater` of an HA `generic_thermostat` with a wide hysteresis, which acts only as a safety cut-off.
 
 Copy `secrets.example.yaml` to `secrets.yaml` and fill it in. Both configs use the same device name, so the target config replaces the diagnostic one over OTA.
 

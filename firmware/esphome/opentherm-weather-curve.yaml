@@ -1,38 +1,38 @@
-# OpenTherm – konfiguracja DOCELOWA: krzywa pogodowa + korekta pokojowa
-# ESP32-WROOM + adapter OpenTherm: GPIO21 = RX (wejście), GPIO22 = TX (wyjście)
+# OpenTherm – TARGET config: weather curve + room correction
+# ESP32-WROOM + OpenTherm adapter: GPIO21 = RX (input), GPIO22 = TX (output)
 #
-# Wgrywać DOPIERO po teście konfiguracją diagnostyczną (opentherm-diagnostic.yaml) i skanie.
-# Ta sama nazwa urządzenia (${name}), więc zastępuje diagnostykę przez OTA.
+# Flash ONLY after testing with the diagnostic config (opentherm-diagnostic.yaml) and the scan.
+# Same device name (${name}), so it replaces the diagnostic config over OTA.
 #
-# Jak działa (szczegóły: README.md i docs/control-plan.html):
-#  - HA decyduje, ile ma być w domu (temperatura zadana termostatu ${target_climate})
-#    i czy wolno grzać (switch „Grzanie CO” = heater generic_thermostat, wyłącznik bezpieczeństwa).
-#  - ESP co 30 s liczy temperaturę zasilania:
-#      krzywa = zadana + nachylenie × (zadana − zewnątrz) + przesunięcie
-#      korekta = P × (zadana − pokój) + I (powolna całka, ±5 K)
-#    i wysyła ją do kotła (TSet, ID 1), przyciętą do min/max i do max CO kotła (ID 57, tylko odczyt).
-#  - CO jest włączone przez cały okres grzania. ESP wyłącza je sam tylko, gdy:
-#      na zewnątrz ≥ próg lato (powrót 1 °C niżej),
-#      pokój ≥ zadana + 1 °C przez 15 min (powrót przy ≤ zadana + 0,5 °C).
-#  - Bez HA: ESP się nie restartuje (reboot_timeout: 0s). Po 10 min bez HA grzeje po krzywej
-#    z ostatnią zadaną i ostatnią temperaturą zewnętrzną (potem z kotła albo 0 °C), bez korekty pokojowej.
+# How it works (details: README.md and docs/control-plan.html):
+#  - HA decides how warm the house should be (target temperature of the ${target_climate} thermostat)
+#    and whether heating is allowed (switch "Central heating" = heater of a generic_thermostat, safety cut-off).
+#  - Every 30 s the ESP calculates the flow temperature:
+#      curve      = target + slope × (target − outdoor) + offset
+#      correction = P × (target − room) + I (slow integral, ±5 K)
+#    and sends it to the boiler (TSet, ID 1), clamped to min/max and to the boiler's max CH setpoint (ID 57, read only).
+#  - CH stays enabled for the whole heating season. The ESP turns it off by itself only when:
+#      outdoor ≥ summer threshold (back on 1 °C lower),
+#      room ≥ target + 1 °C for 15 min (back on at ≤ target + 0.5 °C).
+#  - Without HA: the ESP does not reboot (reboot_timeout: 0s). After 10 min without HA it heats on the curve
+#    with the last target and last outdoor temperature (then the boiler's, or 0 °C), without room correction.
 #
-# Zasady bezpieczeństwa (README.md): zapisywane jest tylko TSet (ID 1) w zakresie 20–60 °C.
-# Max CO (ID 57) i zadana CWU (ID 56) są tylko odczytywane.
+# Safety rules (README.md): only TSet (ID 1) is written, within 20–60 °C.
+# Max CH setpoint (ID 57) and DHW setpoint (ID 56) are read only.
 #
-# Przed pierwszym uruchomieniem: odczytaj nastawę CO z panelu kotła i ustaw „Przesunięcie krzywej”
-# tak, żeby „Zasilanie z krzywej” przy dzisiejszej pogodzie dawało mniej więcej tyle samo.
+# Before the first run: read the CH setting from the boiler panel and set "Curve offset"
+# so that "Curve flow temperature" gives about the same in today's weather.
 #
-# Sekrety: wifi_ssid, wifi_password, api_key, ota_password, ap_password (zobacz secrets.example.yaml).
-# Encje HA ustawiasz w substitutions poniżej.
-# Sensory, których Twój kocioł nie obsługuje (wynik skanu), usuń, żeby nie zaśmiecały magistrali.
+# Secrets: wifi_ssid, wifi_password, api_key, ota_password, ap_password (see secrets.example.yaml).
+# Set the HA entities in substitutions below.
+# Remove sensors your boiler does not support (scan result) so they don't clutter the bus.
 
 substitutions:
   name: opentherm-boiler
-  friendly_name: Kocioł
-  outdoor_sensor: sensor.outdoor_temperature     # temperatura na zewnątrz
-  room_sensor: sensor.living_room_temperature    # temperatura w pokoju odniesienia
-  target_climate: climate.heating                # termostat HA; bierzemy atrybut temperature (zadana)
+  friendly_name: Boiler
+  outdoor_sensor: sensor.outdoor_temperature     # outdoor temperature
+  room_sensor: sensor.living_room_temperature    # reference room temperature
+  target_climate: climate.heating                # HA thermostat; its temperature attribute (target) is used
 
 esphome:
   name: ${name}
@@ -47,7 +47,7 @@ logger:
 api:
   encryption:
     key: !secret api_key
-  reboot_timeout: 0s          # domyślnie ESP restartuje się po 15 min bez HA – tu nie wolno
+  reboot_timeout: 0s          # by default the ESP reboots after 15 min without HA – not here
 
 ota:
   - platform: esphome
@@ -66,29 +66,29 @@ opentherm:
   in_pin: GPIO21
   out_pin: GPIO22
 
-# ---------- STAN WEWNĘTRZNY ----------
+# ---------- INTERNAL STATE ----------
 globals:
-  - id: g_target                # ostatnia znana zadana z termostatu HA
+  - id: g_target                # last known target from the HA thermostat
     type: float
     restore_value: true
     initial_value: "21.0"
-  - id: g_integral              # człon I korekty pokojowej [K]
+  - id: g_integral              # I term of the room correction [K]
     type: float
     restore_value: true
     initial_value: "0.0"
-  - id: g_last_tset             # ostatnio wysłane TSet (do ograniczenia narastania)
+  - id: g_last_tset             # last sent TSet (for the rise limit)
     type: float
     restore_value: false
     initial_value: "NAN"
-  - id: g_out_ms                # kiedy przyszła ostatnia temperatura zewnętrzna z HA
+  - id: g_out_ms                # when the last outdoor temperature arrived from HA
     type: uint32_t
     restore_value: false
     initial_value: "0"
-  - id: g_api_lost_ms           # od kiedy brak połączenia z HA (0 = jest połączenie)
+  - id: g_api_lost_ms           # since when HA is disconnected (0 = connected)
     type: uint32_t
     restore_value: false
     initial_value: "0"
-  - id: g_over_since            # od kiedy pokój jest za ciepły
+  - id: g_over_since            # since when the room is too warm
     type: uint32_t
     restore_value: false
     initial_value: "0"
@@ -101,12 +101,12 @@ globals:
     restore_value: false
     initial_value: "false"
 
-# ---------- STEROWANIE Z HA ----------
+# ---------- CONTROL FROM HA ----------
 switch:
-  # To włącza i wyłącza HA (heater generic_thermostat). Po restarcie ESP wraca do ostatniego stanu, domyślnie WŁ.
+  # HA turns this on and off (heater of generic_thermostat). After a restart the ESP restores the last state, ON by default.
   - platform: template
     id: sw_ch_ha
-    name: "Grzanie CO"
+    name: "Central heating"
     icon: mdi:radiator
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
@@ -115,10 +115,10 @@ switch:
     on_turn_off:
       - script.execute: { id: regulate, tick: false }
 
-  # WYŁ. = zasilanie z „Zasilanie ręczne” zamiast z krzywej (do testów i awaryjnie).
+  # OFF = flow from "Manual flow temperature" instead of the curve (for tests and emergencies).
   - platform: template
     id: sw_curve
-    name: "Krzywa pogodowa"
+    name: "Weather curve"
     icon: mdi:chart-bell-curve-cumulative
     entity_category: config
     optimistic: true
@@ -128,7 +128,7 @@ switch:
     on_turn_off:
       - script.execute: { id: regulate, tick: false }
 
-  # Bity OpenTherm – ustawia je tylko logika ESP.
+  # OpenTherm bits – set only by the ESP logic.
   - platform: opentherm
     ch_enable:
       id: ot_ch_enable
@@ -136,12 +136,12 @@ switch:
       restore_mode: ALWAYS_OFF
     dhw_enable:
       id: ot_dhw_enable
-      name: "Grzanie CWU"
+      name: "Domestic hot water"
       restore_mode: ALWAYS_ON
 
 button:
   - platform: template
-    name: "Zeruj korektę I"
+    name: "Reset I correction"
     icon: mdi:restore
     entity_category: config
     on_press:
@@ -149,7 +149,7 @@ button:
       - script.execute: { id: regulate, tick: false }
 
 number:
-  # TSet wysyłane do kotła – ustawia je tylko logika ESP.
+  # TSet sent to the boiler – set only by the ESP logic.
   - platform: opentherm
     t_set:
       id: ot_t_set
@@ -160,10 +160,10 @@ number:
       initial_value: 40
       restore_value: false
 
-  # Strojenie krzywej (z HA, zapamiętywane w ESP)
+  # Curve tuning (from HA, stored on the ESP)
   - platform: template
     id: n_slope
-    name: "Nachylenie krzywej"
+    name: "Curve slope"
     icon: mdi:slope-uphill
     entity_category: config
     optimistic: true
@@ -175,7 +175,7 @@ number:
     mode: box
   - platform: template
     id: n_offset
-    name: "Przesunięcie krzywej"
+    name: "Curve offset"
     icon: mdi:arrow-up-down
     entity_category: config
     unit_of_measurement: "K"
@@ -188,7 +188,7 @@ number:
     mode: box
   - platform: template
     id: n_kp
-    name: "Korekta pokojowa P"
+    name: "Room correction P"
     icon: mdi:home-thermometer
     entity_category: config
     unit_of_measurement: "K/K"
@@ -201,7 +201,7 @@ number:
     mode: box
   - platform: template
     id: n_ki
-    name: "Korekta pokojowa I"
+    name: "Room correction I"
     icon: mdi:home-thermometer-outline
     entity_category: config
     unit_of_measurement: "K/h"
@@ -214,7 +214,7 @@ number:
     mode: box
   - platform: template
     id: n_tmin
-    name: "Zasilanie minimum"
+    name: "Flow temperature minimum"
     icon: mdi:thermometer-low
     entity_category: config
     unit_of_measurement: "°C"
@@ -228,7 +228,7 @@ number:
     mode: box
   - platform: template
     id: n_tmax
-    name: "Zasilanie maksimum"
+    name: "Flow temperature maximum"
     icon: mdi:thermometer-high
     entity_category: config
     unit_of_measurement: "°C"
@@ -242,7 +242,7 @@ number:
     mode: box
   - platform: template
     id: n_rise
-    name: "Narastanie zasilania max"
+    name: "Flow temperature max rise"
     icon: mdi:trending-up
     entity_category: config
     unit_of_measurement: "K/min"
@@ -255,7 +255,7 @@ number:
     mode: box
   - platform: template
     id: n_summer
-    name: "Próg lato"
+    name: "Summer threshold"
     icon: mdi:weather-sunny
     entity_category: config
     unit_of_measurement: "°C"
@@ -269,7 +269,7 @@ number:
     mode: box
   - platform: template
     id: n_manual
-    name: "Zasilanie ręczne"
+    name: "Manual flow temperature"
     icon: mdi:hand-back-right
     entity_category: config
     unit_of_measurement: "°C"
@@ -282,18 +282,18 @@ number:
     step: 0.5
     mode: box
 
-# ---------- REGULACJA ----------
+# ---------- CONTROL LOOP ----------
 script:
   - id: regulate
     mode: queued
     parameters:
-      tick: bool                # true = wywołanie z interwału (liczy się całka)
+      tick: bool                # true = called from the interval (integral runs)
     then:
       - lambda: |-
           const uint32_t now = millis();
           const uint32_t MIN = 60UL * 1000UL;
 
-          // połączenie z HA
+          // connection to HA
           const bool api_ok = api::global_api_server != nullptr && api::global_api_server->is_connected();
           if (api_ok) {
             id(g_api_lost_ms) = 0;
@@ -302,10 +302,10 @@ script:
           }
           const bool ha_lost_long = !api_ok && (now - id(g_api_lost_ms)) > 10 * MIN;
 
-          // temperatura zadana (ostatnia znana)
+          // target temperature (last known)
           const float target = id(g_target);
 
-          // temperatura zewnętrzna: HA → (po 3 h bez HA) kocioł ID 27 → 0 °C
+          // outdoor temperature: HA → (after 3 h without HA) boiler ID 27 → 0 °C
           float tout = id(ha_outdoor).state;
           const char *tout_src = "HA";
           const bool out_stale = id(g_out_ms) == 0 || (!api_ok && (now - id(g_out_ms)) > 180 * MIN);
@@ -313,24 +313,24 @@ script:
             const float t_ot = id(ot_t_outside).state;
             if (!std::isnan(t_ot) && t_ot > -40.0f && t_ot < 50.0f) {
               tout = t_ot;
-              tout_src = "kocioł";
+              tout_src = "boiler";
             } else {
               tout = 0.0f;
-              tout_src = "domyślna 0 °C";
+              tout_src = "default 0 °C";
             }
           }
 
-          // pokój (tylko gdy HA jest połączony)
+          // room (only while HA is connected)
           const float room = id(ha_room).state;
           const bool room_ok = api_ok && !std::isnan(room);
           const float err = room_ok ? (target - room) : 0.0f;
 
-          // próg lato z histerezą 1 K
+          // summer threshold with 1 K hysteresis
           const float summer = id(n_summer).state;
           if (tout >= summer) id(g_summer) = true;
           else if (tout <= summer - 1.0f) id(g_summer) = false;
 
-          // przegrzanie pokoju: ≥ zadana + 1 K przez 15 min, koniec przy ≤ zadana + 0,5 K
+          // room overheat: ≥ target + 1 K for 15 min, ends at ≤ target + 0.5 K
           if (room_ok && room >= target + 1.0f) {
             if (id(g_over_since) == 0) id(g_over_since) = now ? now : 1;
             if ((now - id(g_over_since)) > 15 * MIN) id(g_overheat) = true;
@@ -339,21 +339,21 @@ script:
             if (!room_ok || room <= target + 0.5f) id(g_overheat) = false;
           }
 
-          // czy grzać CO
+          // should CH run
           const bool allowed = id(sw_ch_ha).state || ha_lost_long;
           const bool want = allowed && !id(g_summer) && !id(g_overheat);
 
-          // człon I: tylko przy pracy CO, z danymi z pokoju, raz na interwał (30 s)
+          // I term: only while CH runs, with room data, once per interval (30 s)
           if (tick && want && room_ok && id(sw_curve).state) {
             id(g_integral) += id(n_ki).state * err * (30.0f / 3600.0f);
             id(g_integral) = std::max(-5.0f, std::min(5.0f, id(g_integral)));
           }
 
-          // krzywa + korekta
+          // curve + correction
           const float curve = target + id(n_slope).state * (target - tout) + id(n_offset).state;
           const float corr = room_ok ? (id(n_kp).state * err + id(g_integral)) : 0.0f;
 
-          // granice: 20–60, min/max z HA, max CO odczytane z kotła (ID 57)
+          // limits: 20–60, min/max from HA, max CH read from the boiler (ID 57)
           float hard_max = 60.0f;
           const float boiler_max = id(ot_max_t_set).state;
           if (!std::isnan(boiler_max) && boiler_max >= 20.0f && boiler_max < hard_max) hard_max = boiler_max;
@@ -363,19 +363,19 @@ script:
           float tset;
           if (id(sw_curve).state) {
             tset = std::max(tmin, std::min(tmax, curve + corr));
-            // łagodne narastanie (np. rano po obniżce nocnej); spadek od razu
+            // gentle rise (e.g. in the morning after a night setback); drop immediately
             const float last = id(g_last_tset);
             if (tick && !std::isnan(last) && tset > last) {
               tset = std::min(tset, last + id(n_rise).state * 0.5f);
             } else if (!tick && !std::isnan(last) && tset > last) {
-              tset = last;   // wzrost tylko w rytmie interwału
+              tset = last;   // rise only at the interval pace
             }
           } else {
             tset = std::max(20.0f, std::min(hard_max, id(n_manual).state));
           }
           id(g_last_tset) = tset;
 
-          // wysłanie do kotła
+          // send to the boiler
           if (std::isnan(id(ot_t_set).state) || std::fabs(id(ot_t_set).state - tset) >= 0.05f) {
             auto call = id(ot_t_set).make_call();
             call.set_value(tset);
@@ -384,7 +384,7 @@ script:
           if (want && !id(ot_ch_enable).state) id(ot_ch_enable).turn_on();
           if (!want && id(ot_ch_enable).state) id(ot_ch_enable).turn_off();
 
-          // podgląd w HA
+          // status for HA
           id(s_curve).publish_state(std::max(tmin, std::min(tmax, curve + corr)));
           id(s_tset).publish_state(tset);
           id(s_corr).publish_state(corr);
@@ -392,13 +392,13 @@ script:
           id(s_tout_used).publish_state(tout);
 
           std::string mode;
-          if (id(g_summer)) mode = "Lato – CO wyłączone";
-          else if (id(g_overheat)) mode = "Pokój za ciepły – CO wyłączone";
-          else if (!allowed) mode = "Wyłączone z HA";
-          else if (ha_lost_long) mode = "Bez HA – krzywa bez korekty";
-          else if (!id(sw_curve).state) mode = "Ręcznie";
-          else if (!room_ok) mode = "Krzywa bez korekty pokojowej";
-          else mode = "Krzywa + korekta";
+          if (id(g_summer)) mode = "Summer – CH off";
+          else if (id(g_overheat)) mode = "Room too warm – CH off";
+          else if (!allowed) mode = "Off from HA";
+          else if (ha_lost_long) mode = "No HA – curve without correction";
+          else if (!id(sw_curve).state) mode = "Manual";
+          else if (!room_ok) mode = "Curve without room correction";
+          else mode = "Curve + correction";
           if (id(t_mode).state != mode) id(t_mode).publish_state(mode);
           const std::string src = tout_src;
           if (id(t_tout_src).state != src) id(t_tout_src).publish_state(src);
@@ -408,9 +408,9 @@ interval:
     then:
       - script.execute: { id: regulate, tick: true }
 
-# ---------- ODCZYTY ----------
+# ---------- READINGS ----------
 sensor:
-  # z Home Assistant
+  # from Home Assistant
   - platform: homeassistant
     id: ha_outdoor
     entity_id: ${outdoor_sensor}
@@ -432,10 +432,10 @@ sensor:
           if (!std::isnan(x) && x >= 5.0f && x <= 30.0f) id(g_target) = x;
       - script.execute: { id: regulate, tick: false }
 
-  # wyniki regulacji
+  # control loop outputs
   - platform: template
     id: s_tset
-    name: "Zasilanie zadane (wysłane)"
+    name: "Flow setpoint (sent)"
     icon: mdi:thermometer-chevron-up
     unit_of_measurement: "°C"
     device_class: temperature
@@ -443,7 +443,7 @@ sensor:
     accuracy_decimals: 1
   - platform: template
     id: s_curve
-    name: "Zasilanie z krzywej"
+    name: "Curve flow temperature"
     icon: mdi:chart-bell-curve-cumulative
     unit_of_measurement: "°C"
     device_class: temperature
@@ -451,7 +451,7 @@ sensor:
     accuracy_decimals: 1
   - platform: template
     id: s_corr
-    name: "Korekta pokojowa"
+    name: "Room correction"
     icon: mdi:home-thermometer
     unit_of_measurement: "K"
     state_class: measurement
@@ -459,95 +459,95 @@ sensor:
     entity_category: diagnostic
   - platform: template
     id: s_integral
-    name: "Korekta pokojowa – człon I"
+    name: "Room correction – I term"
     unit_of_measurement: "K"
     state_class: measurement
     accuracy_decimals: 2
     entity_category: diagnostic
   - platform: template
     id: s_tout_used
-    name: "Temperatura zewnętrzna użyta"
+    name: "Outdoor temperature used"
     unit_of_measurement: "°C"
     device_class: temperature
     state_class: measurement
     accuracy_decimals: 1
     entity_category: diagnostic
 
-  # z kotła (OpenTherm)
+  # from the boiler (OpenTherm)
   - platform: opentherm
     t_boiler:
-      name: "Temperatura zasilania"
+      name: "Flow temperature"
     t_ret:
-      name: "Temperatura powrotu"
+      name: "Return temperature"
     t_dhw:
-      name: "Temperatura CWU"
+      name: "DHW temperature"
     t_outside:
       id: ot_t_outside
-      name: "Temperatura zewnętrzna (kocioł)"
+      name: "Outdoor temperature (boiler)"
     ch_pressure:
-      name: "Ciśnienie instalacji"
+      name: "System pressure"
     rel_mod_level:
-      name: "Modulacja palnika"
+      name: "Burner modulation"
     flame_current:
-      name: "Prąd jonizacji"
+      name: "Flame current"
     burner_starts:
-      name: "Starty palnika"
+      name: "Burner starts"
       state_class: total_increasing
     dhw_burner_starts:
-      name: "Starty palnika na CWU"
+      name: "DHW burner starts"
       state_class: total_increasing
     burner_operation_hours:
-      name: "Godziny pracy palnika"
+      name: "Burner operation hours"
       state_class: total_increasing
     dhw_burner_operation_hours:
-      name: "Godziny pracy palnika na CWU"
+      name: "DHW burner operation hours"
       state_class: total_increasing
     max_t_set:
       id: ot_max_t_set
-      name: "Max temperatura CO (odczyt)"
+      name: "Max CH setpoint (read)"
       entity_category: diagnostic
     t_dhw_set:
-      name: "Zadana temperatura CWU (odczyt)"
+      name: "DHW setpoint (read)"
       entity_category: diagnostic
 
   - platform: wifi_signal
-    name: "WiFi sygnał"
+    name: "WiFi signal"
     update_interval: 60s
     entity_category: diagnostic
 
 text_sensor:
   - platform: template
     id: t_mode
-    name: "Tryb sterowania"
+    name: "Control mode"
     icon: mdi:state-machine
   - platform: template
     id: t_tout_src
-    name: "Źródło temperatury zewnętrznej"
+    name: "Outdoor temperature source"
     entity_category: diagnostic
 
 binary_sensor:
   - platform: opentherm
     flame_on:
-      name: "Płomień"
+      name: "Flame"
     ch_active:
-      name: "Grzanie CO aktywne"
+      name: "Central heating active"
     dhw_active:
-      name: "Grzanie CWU aktywne"
+      name: "Hot water active"
     fault_indication:
-      name: "Awaria"
+      name: "Fault"
     diagnostic_indication:
-      name: "Komunikat serwisowy"
+      name: "Diagnostic indication"
     service_request:
-      name: "Wymagany serwis"
+      name: "Service required"
     lockout_reset:
-      name: "Blokada – wymaga resetu"
+      name: "Lockout – reset required"
     low_water_pressure:
-      name: "Niskie ciśnienie wody"
+      name: "Low water pressure"
     flame_fault:
-      name: "Błąd płomienia"
+      name: "Flame fault"
     air_pressure_fault:
-      name: "Błąd ciśnienia powietrza"
+      name: "Air pressure fault"
     water_over_temp:
-      name: "Przegrzanie wody"
+      name: "Water overtemperature"
   - platform: status
-    name: "Połączenie"
+    name: "Connection"
