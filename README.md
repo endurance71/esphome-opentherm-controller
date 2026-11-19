@@ -45,6 +45,22 @@ Docs, firmware comments and Home Assistant entity names are in English. Open the
 - **Board**: a **dot-type perfboard** with a separate pad on each hole. A stripboard will not work with this layout. It needs at least 19 × 29 holes at 2.54 mm; a common 7 × 9 cm board fits.
 - If you change the layout, run `python3 hardware/board_layout.py`. It must print `NETLIST OK`.
 
+### Schematic
+
+The boiler side (left) is powered from the OpenTherm line. The ESP32 side (right) runs on 3.3 V. The two sides are linked only through the optocouplers.
+
+![OpenTherm adapter schematic](hardware/schematic.svg)
+
+### Perfboard layout
+
+Component side. Holes are named by row letter and column number. Columns 21–22 under the optocouplers stay empty as the isolation gap.
+
+![Perfboard, component side](hardware/board-top.svg)
+
+Solder side, mirrored. Each silver line is a wire trace; the full trace and placement tables are in the [build guide](docs/build-guide.html).
+
+![Perfboard, solder side with wire traces](hardware/board-bottom.svg)
+
 ## Firmware
 
 1. **Diagnostic** (`opentherm-diagnostic.yaml`).
