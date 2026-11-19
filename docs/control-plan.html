@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="pl">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenTherm Weather Curve</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: one narrow column (phone first); a live curve calculator on top, then the control chain, safeguards and rollout steps. */
+:root{
+  --bg:#f3f5f7; --surface:#ffffff; --fg:#17202a; --muted:#5b6876; --line:#d9dfe6;
+  --hot:#d9541e; --hot-soft:#fbe6dc; --cold:#1f6fb2; --cold-soft:#dcebf7;
+  --ok:#1d7a4f; --ok-soft:#dcf1e6; --warn:#a86200; --warn-soft:#f8ead2; --bad:#b4282d; --bad-soft:#f7dcdd;
+  --f-display:"Archivo",system-ui,sans-serif; --f-body:"Inter",system-ui,sans-serif; --f-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1418; --surface:#172027; --fg:#e6ecf1; --muted:#97a5b2; --line:#2a3640;
+  --hot:#ff7a45; --hot-soft:#3a2219; --cold:#5aa8ec; --cold-soft:#16293a;
+  --ok:#4cc58a; --ok-soft:#15301f; --warn:#e3a33b; --warn-soft:#33270f; --bad:#f06a6f; --bad-soft:#3a1a1c; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1418; --surface:#172027; --fg:#e6ecf1; --muted:#97a5b2; --line:#2a3640;
+  --hot:#ff7a45; --hot-soft:#3a2219; --cold:#5aa8ec; --cold-soft:#16293a;
+  --ok:#4cc58a; --ok-soft:#15301f; --warn:#e3a33b; --warn-soft:#33270f; --bad:#f06a6f; --bad-soft:#3a1a1c; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:15px/1.55 var(--f-body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 56px}
+main{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:36px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.15}
+h1{font-size:clamp(28px,7vw,40px);font-weight:800;letter-spacing:-.01em}
+h2{font-size:21px;font-weight:700}
+h3{font-size:16px;font-weight:700}
+p{margin:0}
+.eyebrow{font:600 12px/1 var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lead{color:var(--muted);max-width:60ch}
+header{display:flex;flex-direction:column;gap:10px}
+section{display:flex;flex-direction:column;gap:14px}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+
+/* calculator */
+.calc{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:18px}
+.readout{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.ro{border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.ro .k{font-size:12px;color:var(--muted)}
+.ro .v{font:700 26px/1.1 var(--f-mono);font-variant-numeric:tabular-nums}
+.ro.flow{background:var(--hot-soft)} .ro.flow .v{color:var(--hot)}
+.ro.ret{background:var(--cold-soft)} .ro.ret .v{color:var(--cold)}
+.ro.state .v{font-size:16px;font-family:var(--f-display);padding-top:6px}
+.ro.state.good{background:var(--ok-soft)} .ro.state.good .v{color:var(--ok)}
+.ro.state.mid{background:var(--warn-soft)} .ro.state.mid .v{color:var(--warn)}
+.ro.state.none{background:var(--bad-soft)} .ro.state.none .v{color:var(--bad)}
+.sliders{display:flex;flex-direction:column;gap:14px}
+.sl label{display:flex;justify-content:space-between;gap:8px;font-size:14px;font-weight:500}
+.sl label .mono{color:var(--fg)}
+input[type=range]{width:100%;accent-color:var(--hot);margin:6px 0 0}
+input[type=range]:focus-visible{outline:2px solid var(--cold);outline-offset:3px}
+.chart{overflow-x:auto}
+.chart svg{display:block;width:100%;height:auto;min-width:300px}
+.note{font-size:13px;color:var(--muted)}
+details.adv{border-top:1px solid var(--line);padding-top:12px}
+details.adv summary{cursor:pointer;font-weight:600;font-size:14px}
+details.adv .sliders{margin-top:12px}
+
+/* chain */
+.chain{display:flex;flex-direction:column;gap:0}
+.layer{border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;border:1px solid var(--line);background:var(--surface)}
+.layer .tag{font:600 11px/1 var(--f-body);letter-spacing:.08em;text-transform:uppercase}
+.layer.ha .tag{color:var(--muted)}
+.layer.esp{border-color:var(--hot)} .layer.esp .tag{color:var(--hot)}
+.layer.boiler{background:var(--hot-soft);border-color:transparent} .layer.boiler .tag{color:var(--hot)}
+.layer ul{margin:4px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:3px}
+.link{align-self:center;display:flex;flex-direction:column;align-items:center;padding:4px 0;color:var(--muted);font-size:12px}
+.link span{font-family:var(--f-mono)}
+.link::before{content:"";width:2px;height:12px;background:var(--line)}
+.link::after{content:"▼";font-size:10px;line-height:1}
+.side{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}
+.side .layer{border-style:dashed}
+@media (max-width:520px){.side{grid-template-columns:1fr}.readout{grid-template-columns:repeat(2,minmax(0,1fr))}.ro.state{grid-column:1/-1}}
+
+/* lists */
+.cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media (max-width:520px){.cards{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.card p{font-size:14px;color:var(--muted)}
+.metric{font:700 18px/1.2 var(--f-mono);color:var(--cold)}
+ol.steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:30px minmax(0,1fr);gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+ol.steps li::before{content:counter(s);font:700 14px/26px var(--f-mono);width:26px;height:26px;text-align:center;border-radius:50%;background:var(--surface);border:1px solid var(--line)}
+ol.steps li.now::before{background:var(--hot);color:#fff;border-color:var(--hot)}
+ol.steps b{font-weight:600}
+ol.steps p{font-size:14px;color:var(--muted)}
+.pill{display:inline-block;font:600 11px/1 var(--f-body);padding:4px 8px;border-radius:99px;background:var(--warn-soft);color:var(--warn);vertical-align:2px;margin-left:6px}
+footer{font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:6px}
+a{color:var(--cold)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<main>
+<header>
+  <span class="eyebrow">ESPHome · OpenTherm · przykład: ACV ILEA 18/25</span>
+  <h1>Sterowanie kotłem pod kondensację</h1>
+  <p class="lead">Zamiast włączać i wyłączać kocioł z gorącą wodą, ESP32 przez cały okres grzania ustawia mu temperaturę wody. Kocioł pracuje długo, małym płomieniem, a woda wraca do niego chłodna i dzięki temu kondensuje.</p>
+</header>
+
+<section aria-labelledby="h-calc">
+  <h2 id="h-calc">Policz temperaturę wody</h2>
+  <p class="note">Przesuń suwaki. Tak ESP32 policzy temperaturę wody na zasilaniu. Wartości startowe są do strojenia w pierwszym tygodniu.</p>
+  <div class="calc">
+    <div class="readout" aria-live="polite">
+      <div class="ro flow"><span class="k">Woda do grzejników</span><span class="v mono" id="o-flow">–</span></div>
+      <div class="ro ret"><span class="k">Powrót (szacunek)</span><span class="v mono" id="o-ret">–</span></div>
+      <div class="ro state" id="o-state-box"><span class="k">Kondensacja</span><span class="v" id="o-state">–</span></div>
+    </div>
+    <div class="chart" aria-hidden="true"><svg id="chart" viewBox="0 0 640 300"></svg></div>
+    <div class="sliders">
+      <div class="sl"><label for="s-out">Na zewnątrz <span class="mono" id="v-out"></span></label><input id="s-out" type="range" min="-15" max="16" step="1" value="4"></div>
+      <div class="sl"><label for="s-set">Zadana z harmonogramu <span class="mono" id="v-set"></span></label><input id="s-set" type="range" min="17" max="23" step="0.5" value="21"></div>
+      <div class="sl"><label for="s-room">Pokój dzienny teraz <span class="mono" id="v-room"></span></label><input id="s-room" type="range" min="18" max="24" step="0.1" value="21"></div>
+    </div>
+    <details class="adv">
+      <summary>Ustawienia krzywej (do strojenia z HA)</summary>
+      <div class="sliders">
+        <div class="sl"><label for="s-slope">Nachylenie <span class="mono" id="v-slope"></span></label><input id="s-slope" type="range" min="0.6" max="2" step="0.05" value="1.2"></div>
+        <div class="sl"><label for="s-kp">Korekta pokojowa (na 1 °C różnicy) <span class="mono" id="v-kp"></span></label><input id="s-kp" type="range" min="0" max="6" step="0.5" value="3"></div>
+        <div class="sl"><label for="s-dt">Różnica zasilanie − powrót <span class="mono" id="v-dt"></span></label><input id="s-dt" type="range" min="5" max="20" step="1" value="10"></div>
+      </div>
+    </details>
+    <p class="note">Wzór: woda = zadana + nachylenie × (zadana − zewnątrz) + korekta × (zadana − pokój), przycięte do 20–60 °C. Powrót to szacunek; prawdziwy odczyt da kocioł po OpenTherm. Krzywą startową ustaw tak, żeby przy +2…+7 °C dawała mniej więcej tyle, ile kocioł daje dziś, i dopiero potem ją obniżaj.</p>
+  </div>
+</section>
+
+<section aria-labelledby="h-chain">
+  <h2 id="h-chain">Kto za co odpowiada</h2>
+  <div class="chain">
+    <div class="layer ha">
+      <span class="tag">Home Assistant · co i kiedy</span>
+      <h3>Harmonogram → termostat HA (climate)</h3>
+      <ul>
+        <li>Zmienia tylko temperaturę zadaną: pory dnia, noc, skrypty.</li>
+        <li>Niczego w nim nie przerabiamy.</li>
+        <li><span class="mono">generic_thermostat</span> zostaje jako wyłącznik bezpieczeństwa z szeroką histerezą (ok. 1,5 °C), więc prawie nigdy nie przerywa palnika.</li>
+      </ul>
+    </div>
+    <div class="link"><span>temperatura zadana</span></div>
+    <div class="layer esp">
+      <span class="tag">ESP32 · jak gorąco</span>
+      <h3>Krzywa pogodowa + korekta z pokoju</h3>
+      <ul>
+        <li>Liczy temperaturę wody z temperatury na zewnątrz i zadanej.</li>
+        <li>W pokoju za ciepło: woda chłodniej, płomień mniejszy. Kotła nie wyłącza.</li>
+        <li>Grzanie CO włączone przez cały okres grzania. Wyłącza się dopiero przy przegrzaniu pokoju albo w cieple (próg lato).</li>
+      </ul>
+    </div>
+    <div class="link"><span>OpenTherm, 2 przewody</span></div>
+    <div class="layer">
+      <span class="tag">Adapter</span>
+      <h3>Transoptory, strona kotła odizolowana od ESP</h3>
+    </div>
+    <div class="link"><span>zacisk Z1</span></div>
+    <div class="layer boiler">
+      <span class="tag">Kocioł</span>
+      <h3>ACV ILEA: moduluje 4,0–18,5 kW</h3>
+      <ul>
+        <li>Odsyła do HA: płomień, modulację, temperatury zasilania i powrotu, ciśnienie, błędy.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="side">
+    <div class="layer">
+      <span class="tag">Gdy HA nie działa</span>
+      <p class="note">ESP nie restartuje się bez HA. Po ok. 10 min grzeje dalej po krzywej z ostatnią zadaną.</p>
+    </div>
+    <div class="layer">
+      <span class="tag">Zapas</span>
+      <p class="note">Stare sterowanie (np. przekaźnik ON/OFF) zostaje pod ręką. Powrót awaryjny: 2 przewody z powrotem na wejście termostatu i stary <span class="mono">heater:</span>.</p>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="h-gain">
+  <h2 id="h-gain">Skąd oszczędność gazu</h2>
+  <div class="cards">
+    <div class="card"><h3>Chłodny powrót</h3><span class="metric">&lt; 45 °C</span><p>Poniżej tej temperatury para w spalinach skrapla się i oddaje ciepło. Cel: przez większość czasu grzania.</p></div>
+    <div class="card"><h3>Mniej startów palnika</h3><span class="metric">starty / doba ↓</span><p>Każdy start to przedmuch i praca poza kondensacją. Policz starty na dobę przed zmianą, żeby mieć z czym porównać.</p></div>
+    <div class="card"><h3>Łagodne obniżki nocne</h3><span class="metric">−1…1,5 °C</span><p>Głębokie wychłodzenie oznacza rano gorącą wodę bez kondensacji. Lepsza mała obniżka i ograniczone dogrzewanie rano.</p></div>
+    <div class="card"><h3>Hydraulika przy kotle</h3><span class="metric">do sprawdzenia</span><p>Wszystkie grzejniki otwarte, niższy bieg pompy, parametr antytaktowania w menu kotła.</p></div>
+  </div>
+  <p class="note">Jeśli gazomierz spisujesz ręcznie, na co dzień efekt widać w danych z kotła. Raz w miesiącu porównujemy gaz w przeliczeniu na temperaturę na zewnątrz (stopniodni) przed i po zmianie.</p>
+</section>
+
+<section aria-labelledby="h-steps">
+  <h2 id="h-steps">Kolejność wdrożenia</h2>
+  <ol class="steps">
+    <li class="now"><div><b>Test: diagnostyka i skaner</b><span class="pill">pierwszy krok</span><p>W dzień, przy łagodnej pogodzie, krótko. Przed testem spisać nastawy kotła. Stare sterowanie na ten czas odpięte z wejścia termostatu.</p></div></li>
+    <li><div><b>Konfiguracja docelowa ESPHome</b><p>Krzywa, korekta pokojowa, zabezpieczenia. Dodanie urządzenia w HA.</p></div></li>
+    <li><div><b>generic_thermostat na switch OpenTherm</b><p>Szeroka histereza, kopia pliku przed zmianą.</p></div></li>
+    <li><div><b>Licznik „Palnik dziś”</b><p>history_stats liczony z płomienia zamiast czasu włączenia przekaźnika.</p></div></li>
+    <li><div><b>Asystent głosowy</b><p>Aliasy przeniesione ze starego przełącznika na nowy switch.</p></div></li>
+    <li><div><b>Stare sterowanie odłożone jako zapas</b></div></li>
+    <li><div><b>Pierwszy tydzień strojenia</b><p>Obniżać krzywą krok po kroku, dopóki w domu jest ciepło. Przy mrozie pilnować najzimniejszego pokoju.</p></div></li>
+    <li><div><b>Dashboard „Kocioł”</b><p>Zasilanie i powrót, modulacja, płomień, starty, ciśnienie, awarie.</p></div></li>
+  </ol>
+</section>
+
+<footer>
+  <p>Konfiguracja: <span class="mono">firmware/esphome/opentherm-weather-curve.yaml</span>. Montaż adaptera: <a href="build-guide.html">build guide</a>.</p>
+</footer>
+</main>
+
+<script>
+(function(){
+  const $=id=>document.getElementById(id);
+  const ids=["out","set","room","slope","kp","dt"];
+  const fmt=(v,d=1)=>(Math.round(v*10**d)/10**d).toLocaleString("pl-PL",{minimumFractionDigits:d,maximumFractionDigits:d});
+  const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+  function flowAt(tout,p){return clamp(p.set+p.slope*(p.set-tout)+p.kp*(p.set-p.room),20,60);}
+  function css(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim();}
+  function render(){
+    const p={};ids.forEach(k=>p[k]=parseFloat($("s-"+k).value));
+    $("v-out").textContent=fmt(p.out,0)+" °C";
+    $("v-set").textContent=fmt(p.set,1)+" °C";
+    $("v-room").textContent=fmt(p.room,1)+" °C";
+    $("v-slope").textContent=fmt(p.slope,2);
+    $("v-kp").textContent=fmt(p.kp,1)+" K";
+    $("v-dt").textContent=fmt(p.dt,0)+" K";
+    const summer=p.out>=16, over=p.room>=p.set+1;
+    const flow=flowAt(p.out,p), ret=flow-p.dt;
+    const box=$("o-state-box");
+    if(summer||over){
+      $("o-flow").textContent="CO wył.";$("o-ret").textContent="–";
+      $("o-state").textContent=summer?"próg lato":"pokój przegrzany";box.className="ro state mid";
+    }else{
+      $("o-flow").textContent=fmt(flow)+" °C";$("o-ret").textContent=fmt(ret)+" °C";
+      if(ret<45){$("o-state").textContent="pełna";box.className="ro state good";}
+      else if(ret<55){$("o-state").textContent="częściowa";box.className="ro state mid";}
+      else{$("o-state").textContent="brak";box.className="ro state none";}
+    }
+    drawChart(p,flow,summer||over);
+  }
+  function drawChart(p,flow,off){
+    const W=640,H=300,L=44,R=16,T=16,B=36;
+    const x=t=>L+(t+15)/31*(W-L-R), y=v=>T+(65-v)/(65-15)*(H-T-B);
+    const fg=css("--muted"),line=css("--line"),hot=css("--hot"),cold=css("--cold"),ok=css("--ok-soft"),surf=css("--fg");
+    let s="";
+    s+=`<rect x="${L}" y="${y(45)}" width="${W-L-R}" height="${y(15)-y(45)}" fill="${ok}"/>`;
+    s+=`<text x="${W-R-6}" y="${y(45)+16}" text-anchor="end" font-size="12" fill="${fg}" font-family="Inter,system-ui">powrót tutaj = kondensacja</text>`;
+    for(const v of [20,30,40,50,60]){s+=`<line x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" stroke="${line}" stroke-width="1"/><text x="${L-8}" y="${y(v)+4}" text-anchor="end" font-size="12" fill="${fg}" font-family="JetBrains Mono,monospace">${v}</text>`;}
+    for(const t of [-15,-10,-5,0,5,10,15]){s+=`<text x="${x(t)}" y="${H-B+20}" text-anchor="middle" font-size="12" fill="${fg}" font-family="JetBrains Mono,monospace">${t>0?"+"+t:t}</text>`;}
+    s+=`<text x="${L}" y="${H-4}" font-size="12" fill="${fg}" font-family="Inter,system-ui">na zewnątrz °C</text>`;
+    let fp="",rp="";
+    for(let t=-15;t<=16;t+=0.5){const f=flowAt(t,p);fp+=(fp?"L":"M")+x(t).toFixed(1)+" "+y(f).toFixed(1);rp+=(rp?"L":"M")+x(t).toFixed(1)+" "+y(f-p.dt).toFixed(1);}
+    s+=`<path d="${fp}" fill="none" stroke="${hot}" stroke-width="2.5"/>`;
+    s+=`<path d="${rp}" fill="none" stroke="${cold}" stroke-width="2" stroke-dasharray="5 4"/>`;
+    s+=`<text x="${x(-14)}" y="${y(flowAt(-14,p))-8}" font-size="12" fill="${hot}" font-family="Inter,system-ui" font-weight="600">zasilanie</text>`;
+    s+=`<text x="${x(-14)}" y="${y(flowAt(-14,p)-p.dt)+16}" font-size="12" fill="${cold}" font-family="Inter,system-ui" font-weight="600">powrót</text>`;
+    if(!off){
+      const cx=x(p.out);
+      s+=`<line x1="${cx}" x2="${cx}" y1="${T}" y2="${H-B}" stroke="${surf}" stroke-opacity=".25" stroke-width="1"/>`;
+      s+=`<circle cx="${cx}" cy="${y(flow)}" r="6" fill="${hot}" stroke="${css("--surface")}" stroke-width="2"/>`;
+      s+=`<circle cx="${cx}" cy="${y(flow-p.dt)}" r="5" fill="${cold}" stroke="${css("--surface")}" stroke-width="2"/>`;
+    }
+    $("chart").innerHTML=s;
+  }
+  ids.forEach(k=>$("s-"+k).addEventListener("input",render));
+  try{matchMedia("(prefers-color-scheme: dark)").addEventListener("change",render);}catch(e){}
+  new MutationObserver(render).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+  render();
+})();
+</script>
+</html>

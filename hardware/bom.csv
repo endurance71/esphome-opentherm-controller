@@ -1,0 +1,19 @@
+ref,value,package,qty,example_part_tme,note
+U1;U2,PC817,DIP-4,2,PC817X2CSZ9F,optocouplers (boiler side isolated from ESP32)
+Q1,BC557B,TO-92,1,BC557B-DIO,PNP; pinout C-B-E (check the datasheet)
+D1-D4,1N4148,DO-35,4,1N4148-DIO,bridge rectifier (polarity of the boiler wires does not matter)
+D5,Zener 4.7 V 0.5 W,DO-35,1,BZX55C4V7-DC,
+D7,Zener 4.3 V 0.5 W,DO-35,1,BZX55C4V3-DC,
+D6,Zener 15 V 0.5 W,DO-35,1,BZX55C15-TAP,
+R1,220R 0.25W,axial,1,MF0S4FF2200A50,
+R2,100R 0.25W,axial,1,MF0207FTE-100R,
+R3;R5,330R 0.25W,axial,2,MF0207FTE-330R,
+R4,1k5 0.25W,axial,1,MFF04JJ0152A50,1k-2k2 acceptable
+R6;R7,1k 0.25W,axial,2,,LED resistors
+LD1,LED 3 mm red,3 mm,1,,TX indicator
+LD2,LED 3 mm green,3 mm,1,,RX indicator
+J1,screw terminal 2-pin 5.0 mm,THT,1,DG301-5.0-2P12,to the boiler's OpenTherm / room thermostat terminals
+J2,pin header male 1x4,2.54 mm,1,,1 GND 2 GPIO22 3 3V3 4 GPIO21
+-,jumper wires F-F,,4,CAB/AG,adapter to ESP32
+-,perfboard DOT type (single pads per hole; NOT stripboard),2.54 mm,1,,min. 19 x 29 holes, e.g. 7 x 9 cm (24 x 30 holes)
+-,ESP32-WROOM DevKit,,1,,ESPHome board: esp32dev
