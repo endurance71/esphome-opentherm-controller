@@ -28,13 +28,13 @@ firmware/esphome/
 firmware/arduino/OpenThermScanner/
   OpenThermScanner.ino      deep scan of data IDs 1–255, safe write tests, TSP/FHB, web report
 docs/
-  build-guide.html          interactive build guide (Polish): schematic, board views, wiring, BOM
-  control-plan.html         interactive control plan with a curve calculator (Polish)
+  build-guide.html          interactive build guide: schematic, board views, wiring, BOM
+  control-plan.html         interactive control plan with a curve calculator
 boilers/
   acv-ilea/                 notes for ACV ILEA (Atlantic Naia 2 platform)
 ```
 
-The docs and the Home Assistant entity names are in Polish for now, e.g. „Grzanie CO” is central heating and „Grzanie CWU” is domestic hot water. Open the HTML pages from a local clone, or with any static HTML preview.
+The docs are in English. The ESPHome entity names and the comments in the firmware are still in Polish, e.g. „Grzanie CO” is central heating and „Grzanie CWU” is domestic hot water. Open the HTML pages from a local clone, or with any static HTML preview.
 
 ## Hardware
 

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pl">
+<html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OpenTherm Weather Curve</title>
@@ -97,113 +97,113 @@ a{color:var(--cold)}
 
 <main>
 <header>
-  <span class="eyebrow">ESPHome · OpenTherm · przykład: ACV ILEA 18/25</span>
-  <h1>Sterowanie kotłem pod kondensację</h1>
-  <p class="lead">Zamiast włączać i wyłączać kocioł z gorącą wodą, ESP32 przez cały okres grzania ustawia mu temperaturę wody. Kocioł pracuje długo, małym płomieniem, a woda wraca do niego chłodna i dzięki temu kondensuje.</p>
+  <span class="eyebrow">ESPHome · OpenTherm · example: ACV ILEA 18/25</span>
+  <h1>Running a boiler for condensing</h1>
+  <p class="lead">Instead of switching the boiler on and off with hot water, the ESP32 sets its water temperature for the whole heating season. The boiler runs long, at a low flame, and the water comes back cool, so it condenses.</p>
 </header>
 
 <section aria-labelledby="h-calc">
-  <h2 id="h-calc">Policz temperaturę wody</h2>
-  <p class="note">Przesuń suwaki. Tak ESP32 policzy temperaturę wody na zasilaniu. Wartości startowe są do strojenia w pierwszym tygodniu.</p>
+  <h2 id="h-calc">Work out the water temperature</h2>
+  <p class="note">Move the sliders. This is how the ESP32 calculates the flow temperature. The starting values are meant to be tuned in the first week.</p>
   <div class="calc">
     <div class="readout" aria-live="polite">
-      <div class="ro flow"><span class="k">Woda do grzejników</span><span class="v mono" id="o-flow">–</span></div>
-      <div class="ro ret"><span class="k">Powrót (szacunek)</span><span class="v mono" id="o-ret">–</span></div>
-      <div class="ro state" id="o-state-box"><span class="k">Kondensacja</span><span class="v" id="o-state">–</span></div>
+      <div class="ro flow"><span class="k">Water to radiators</span><span class="v mono" id="o-flow">–</span></div>
+      <div class="ro ret"><span class="k">Return (estimate)</span><span class="v mono" id="o-ret">–</span></div>
+      <div class="ro state" id="o-state-box"><span class="k">Condensing</span><span class="v" id="o-state">–</span></div>
     </div>
     <div class="chart" aria-hidden="true"><svg id="chart" viewBox="0 0 640 300"></svg></div>
     <div class="sliders">
-      <div class="sl"><label for="s-out">Na zewnątrz <span class="mono" id="v-out"></span></label><input id="s-out" type="range" min="-15" max="16" step="1" value="4"></div>
-      <div class="sl"><label for="s-set">Zadana z harmonogramu <span class="mono" id="v-set"></span></label><input id="s-set" type="range" min="17" max="23" step="0.5" value="21"></div>
-      <div class="sl"><label for="s-room">Pokój dzienny teraz <span class="mono" id="v-room"></span></label><input id="s-room" type="range" min="18" max="24" step="0.1" value="21"></div>
+      <div class="sl"><label for="s-out">Outdoor <span class="mono" id="v-out"></span></label><input id="s-out" type="range" min="-15" max="16" step="1" value="4"></div>
+      <div class="sl"><label for="s-set">Target from schedule <span class="mono" id="v-set"></span></label><input id="s-set" type="range" min="17" max="23" step="0.5" value="21"></div>
+      <div class="sl"><label for="s-room">Reference room now <span class="mono" id="v-room"></span></label><input id="s-room" type="range" min="18" max="24" step="0.1" value="21"></div>
     </div>
     <details class="adv">
-      <summary>Ustawienia krzywej (do strojenia z HA)</summary>
+      <summary>Curve settings (tuned from HA)</summary>
       <div class="sliders">
-        <div class="sl"><label for="s-slope">Nachylenie <span class="mono" id="v-slope"></span></label><input id="s-slope" type="range" min="0.6" max="2" step="0.05" value="1.2"></div>
-        <div class="sl"><label for="s-kp">Korekta pokojowa (na 1 °C różnicy) <span class="mono" id="v-kp"></span></label><input id="s-kp" type="range" min="0" max="6" step="0.5" value="3"></div>
-        <div class="sl"><label for="s-dt">Różnica zasilanie − powrót <span class="mono" id="v-dt"></span></label><input id="s-dt" type="range" min="5" max="20" step="1" value="10"></div>
+        <div class="sl"><label for="s-slope">Slope <span class="mono" id="v-slope"></span></label><input id="s-slope" type="range" min="0.6" max="2" step="0.05" value="1.2"></div>
+        <div class="sl"><label for="s-kp">Room correction (per 1 °C difference) <span class="mono" id="v-kp"></span></label><input id="s-kp" type="range" min="0" max="6" step="0.5" value="3"></div>
+        <div class="sl"><label for="s-dt">Flow − return difference <span class="mono" id="v-dt"></span></label><input id="s-dt" type="range" min="5" max="20" step="1" value="10"></div>
       </div>
     </details>
-    <p class="note">Wzór: woda = zadana + nachylenie × (zadana − zewnątrz) + korekta × (zadana − pokój), przycięte do 20–60 °C. Powrót to szacunek; prawdziwy odczyt da kocioł po OpenTherm. Krzywą startową ustaw tak, żeby przy +2…+7 °C dawała mniej więcej tyle, ile kocioł daje dziś, i dopiero potem ją obniżaj.</p>
+    <p class="note">Formula: water = target + slope × (target − outdoor) + correction × (target − room), clamped to 20–60 °C. The return is an estimate; the boiler reports the real value over OpenTherm. Set the starting curve so that at +2…+7 °C outside it gives roughly what the boiler gives today, and only then lower it.</p>
   </div>
 </section>
 
 <section aria-labelledby="h-chain">
-  <h2 id="h-chain">Kto za co odpowiada</h2>
+  <h2 id="h-chain">Who is responsible for what</h2>
   <div class="chain">
     <div class="layer ha">
-      <span class="tag">Home Assistant · co i kiedy</span>
-      <h3>Harmonogram → termostat HA (climate)</h3>
+      <span class="tag">Home Assistant · what and when</span>
+      <h3>Schedule → HA thermostat (climate)</h3>
       <ul>
-        <li>Zmienia tylko temperaturę zadaną: pory dnia, noc, skrypty.</li>
-        <li>Niczego w nim nie przerabiamy.</li>
-        <li><span class="mono">generic_thermostat</span> zostaje jako wyłącznik bezpieczeństwa z szeroką histerezą (ok. 1,5 °C), więc prawie nigdy nie przerywa palnika.</li>
+        <li>Only changes the target temperature: times of day, night, scripts.</li>
+        <li>Nothing in it needs rebuilding.</li>
+        <li><span class="mono">generic_thermostat</span> stays as a safety cut-off with a wide hysteresis (about 1.5 °C), so it almost never interrupts the burner.</li>
       </ul>
     </div>
-    <div class="link"><span>temperatura zadana</span></div>
+    <div class="link"><span>target temperature</span></div>
     <div class="layer esp">
-      <span class="tag">ESP32 · jak gorąco</span>
-      <h3>Krzywa pogodowa + korekta z pokoju</h3>
+      <span class="tag">ESP32 · how hot</span>
+      <h3>Weather curve + room correction</h3>
       <ul>
-        <li>Liczy temperaturę wody z temperatury na zewnątrz i zadanej.</li>
-        <li>W pokoju za ciepło: woda chłodniej, płomień mniejszy. Kotła nie wyłącza.</li>
-        <li>Grzanie CO włączone przez cały okres grzania. Wyłącza się dopiero przy przegrzaniu pokoju albo w cieple (próg lato).</li>
+        <li>Calculates the water temperature from the outdoor and target temperatures.</li>
+        <li>Room too warm: cooler water, smaller flame. It does not turn the boiler off.</li>
+        <li>Central heating stays on for the whole season. It turns off only when the room overheats or it is warm outside (summer threshold).</li>
       </ul>
     </div>
-    <div class="link"><span>OpenTherm, 2 przewody</span></div>
+    <div class="link"><span>OpenTherm, 2 wires</span></div>
     <div class="layer">
       <span class="tag">Adapter</span>
-      <h3>Transoptory, strona kotła odizolowana od ESP</h3>
+      <h3>Optocouplers, boiler side isolated from the ESP</h3>
     </div>
-    <div class="link"><span>zacisk Z1</span></div>
+    <div class="link"><span>thermostat terminals</span></div>
     <div class="layer boiler">
-      <span class="tag">Kocioł</span>
-      <h3>ACV ILEA: moduluje 4,0–18,5 kW</h3>
+      <span class="tag">Boiler</span>
+      <h3>ACV ILEA: modulates 4.0–18.5 kW</h3>
       <ul>
-        <li>Odsyła do HA: płomień, modulację, temperatury zasilania i powrotu, ciśnienie, błędy.</li>
+        <li>Reports to HA: flame, modulation, flow and return temperatures, pressure, faults.</li>
       </ul>
     </div>
   </div>
   <div class="side">
     <div class="layer">
-      <span class="tag">Gdy HA nie działa</span>
-      <p class="note">ESP nie restartuje się bez HA. Po ok. 10 min grzeje dalej po krzywej z ostatnią zadaną.</p>
+      <span class="tag">When HA is down</span>
+      <p class="note">The ESP does not reboot without HA. After about 10 minutes it keeps heating on the curve with the last target.</p>
     </div>
     <div class="layer">
-      <span class="tag">Zapas</span>
-      <p class="note">Stare sterowanie (np. przekaźnik ON/OFF) zostaje pod ręką. Powrót awaryjny: 2 przewody z powrotem na wejście termostatu i stary <span class="mono">heater:</span>.</p>
+      <span class="tag">Fallback</span>
+      <p class="note">Keep the old control (e.g. an ON/OFF relay) at hand. To go back: 2 wires back on the thermostat input and the old <span class="mono">heater:</span>.</p>
     </div>
   </div>
 </section>
 
 <section aria-labelledby="h-gain">
-  <h2 id="h-gain">Skąd oszczędność gazu</h2>
+  <h2 id="h-gain">Where the gas saving comes from</h2>
   <div class="cards">
-    <div class="card"><h3>Chłodny powrót</h3><span class="metric">&lt; 45 °C</span><p>Poniżej tej temperatury para w spalinach skrapla się i oddaje ciepło. Cel: przez większość czasu grzania.</p></div>
-    <div class="card"><h3>Mniej startów palnika</h3><span class="metric">starty / doba ↓</span><p>Każdy start to przedmuch i praca poza kondensacją. Policz starty na dobę przed zmianą, żeby mieć z czym porównać.</p></div>
-    <div class="card"><h3>Łagodne obniżki nocne</h3><span class="metric">−1…1,5 °C</span><p>Głębokie wychłodzenie oznacza rano gorącą wodę bez kondensacji. Lepsza mała obniżka i ograniczone dogrzewanie rano.</p></div>
-    <div class="card"><h3>Hydraulika przy kotle</h3><span class="metric">do sprawdzenia</span><p>Wszystkie grzejniki otwarte, niższy bieg pompy, parametr antytaktowania w menu kotła.</p></div>
+    <div class="card"><h3>Cool return</h3><span class="metric">&lt; 45 °C</span><p>Below this temperature the water vapour in the flue gas condenses and gives off its heat. Goal: most of the heating time.</p></div>
+    <div class="card"><h3>Fewer burner starts</h3><span class="metric">starts / day ↓</span><p>Every start means a purge and running outside condensing. Count starts per day before the change so you have a baseline.</p></div>
+    <div class="card"><h3>Gentle night setbacks</h3><span class="metric">−1…1.5 °C</span><p>A deep setback means hot water in the morning and no condensing. Better a small setback and a limited morning boost.</p></div>
+    <div class="card"><h3>Hydraulics at the boiler</h3><span class="metric">to check</span><p>All radiators open, lower pump speed, anti-cycling parameter in the boiler menu.</p></div>
   </div>
-  <p class="note">Jeśli gazomierz spisujesz ręcznie, na co dzień efekt widać w danych z kotła. Raz w miesiącu porównujemy gaz w przeliczeniu na temperaturę na zewnątrz (stopniodni) przed i po zmianie.</p>
+  <p class="note">If you read the gas meter by hand, day to day you see the effect in the boiler data. Once a month, compare gas use normalised for outdoor temperature (degree days) before and after the change.</p>
 </section>
 
 <section aria-labelledby="h-steps">
-  <h2 id="h-steps">Kolejność wdrożenia</h2>
+  <h2 id="h-steps">Rollout order</h2>
   <ol class="steps">
-    <li class="now"><div><b>Test: diagnostyka i skaner</b><span class="pill">pierwszy krok</span><p>W dzień, przy łagodnej pogodzie, krótko. Przed testem spisać nastawy kotła. Stare sterowanie na ten czas odpięte z wejścia termostatu.</p></div></li>
-    <li><div><b>Konfiguracja docelowa ESPHome</b><p>Krzywa, korekta pokojowa, zabezpieczenia. Dodanie urządzenia w HA.</p></div></li>
-    <li><div><b>generic_thermostat na switch OpenTherm</b><p>Szeroka histereza, kopia pliku przed zmianą.</p></div></li>
-    <li><div><b>Licznik „Palnik dziś”</b><p>history_stats liczony z płomienia zamiast czasu włączenia przekaźnika.</p></div></li>
-    <li><div><b>Asystent głosowy</b><p>Aliasy przeniesione ze starego przełącznika na nowy switch.</p></div></li>
-    <li><div><b>Stare sterowanie odłożone jako zapas</b></div></li>
-    <li><div><b>Pierwszy tydzień strojenia</b><p>Obniżać krzywą krok po kroku, dopóki w domu jest ciepło. Przy mrozie pilnować najzimniejszego pokoju.</p></div></li>
-    <li><div><b>Dashboard „Kocioł”</b><p>Zasilanie i powrót, modulacja, płomień, starty, ciśnienie, awarie.</p></div></li>
+    <li class="now"><div><b>Test: diagnostics and scanner</b><span class="pill">first step</span><p>During the day, in mild weather, briefly. Write down the boiler settings first. Disconnect the old control from the thermostat input for the test.</p></div></li>
+    <li><div><b>Target ESPHome config</b><p>Curve, room correction, safeguards. Add the device in HA.</p></div></li>
+    <li><div><b>generic_thermostat on the OpenTherm switch</b><p>Wide hysteresis; back up the file before the change.</p></div></li>
+    <li><div><b>"Burner today" counter</b><p>history_stats based on the flame instead of relay on-time.</p></div></li>
+    <li><div><b>Voice assistant</b><p>Move the aliases from the old switch to the new one.</p></div></li>
+    <li><div><b>Old control kept as a fallback</b></div></li>
+    <li><div><b>First week of tuning</b><p>Lower the curve step by step while the house stays warm. In frost, watch the coldest room.</p></div></li>
+    <li><div><b>"Boiler" dashboard</b><p>Flow and return, modulation, flame, starts, pressure, faults.</p></div></li>
   </ol>
 </section>
 
 <footer>
-  <p>Konfiguracja: <span class="mono">firmware/esphome/opentherm-weather-curve.yaml</span>. Montaż adaptera: <a href="build-guide.html">build guide</a>.</p>
+  <p>Config: <span class="mono">firmware/esphome/opentherm-weather-curve.yaml</span>. Building the adapter: <a href="build-guide.html">build guide</a>.</p>
 </footer>
 </main>
 
@@ -211,7 +211,7 @@ a{color:var(--cold)}
 (function(){
   const $=id=>document.getElementById(id);
   const ids=["out","set","room","slope","kp","dt"];
-  const fmt=(v,d=1)=>(Math.round(v*10**d)/10**d).toLocaleString("pl-PL",{minimumFractionDigits:d,maximumFractionDigits:d});
+  const fmt=(v,d=1)=>(Math.round(v*10**d)/10**d).toLocaleString("en-GB",{minimumFractionDigits:d,maximumFractionDigits:d});
   const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
   function flowAt(tout,p){return clamp(p.set+p.slope*(p.set-tout)+p.kp*(p.set-p.room),20,60);}
   function css(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim();}
@@ -227,13 +227,13 @@ a{color:var(--cold)}
     const flow=flowAt(p.out,p), ret=flow-p.dt;
     const box=$("o-state-box");
     if(summer||over){
-      $("o-flow").textContent="CO wył.";$("o-ret").textContent="–";
-      $("o-state").textContent=summer?"próg lato":"pokój przegrzany";box.className="ro state mid";
+      $("o-flow").textContent="CH off";$("o-ret").textContent="–";
+      $("o-state").textContent=summer?"summer threshold":"room overheated";box.className="ro state mid";
     }else{
       $("o-flow").textContent=fmt(flow)+" °C";$("o-ret").textContent=fmt(ret)+" °C";
-      if(ret<45){$("o-state").textContent="pełna";box.className="ro state good";}
-      else if(ret<55){$("o-state").textContent="częściowa";box.className="ro state mid";}
-      else{$("o-state").textContent="brak";box.className="ro state none";}
+      if(ret<45){$("o-state").textContent="full";box.className="ro state good";}
+      else if(ret<55){$("o-state").textContent="partial";box.className="ro state mid";}
+      else{$("o-state").textContent="none";box.className="ro state none";}
     }
     drawChart(p,flow,summer||over);
   }
@@ -243,16 +243,16 @@ a{color:var(--cold)}
     const fg=css("--muted"),line=css("--line"),hot=css("--hot"),cold=css("--cold"),ok=css("--ok-soft"),surf=css("--fg");
     let s="";
     s+=`<rect x="${L}" y="${y(45)}" width="${W-L-R}" height="${y(15)-y(45)}" fill="${ok}"/>`;
-    s+=`<text x="${W-R-6}" y="${y(45)+16}" text-anchor="end" font-size="12" fill="${fg}" font-family="Inter,system-ui">powrót tutaj = kondensacja</text>`;
+    s+=`<text x="${W-R-6}" y="${y(45)+16}" text-anchor="end" font-size="12" fill="${fg}" font-family="Inter,system-ui">return here = condensing</text>`;
     for(const v of [20,30,40,50,60]){s+=`<line x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" stroke="${line}" stroke-width="1"/><text x="${L-8}" y="${y(v)+4}" text-anchor="end" font-size="12" fill="${fg}" font-family="JetBrains Mono,monospace">${v}</text>`;}
     for(const t of [-15,-10,-5,0,5,10,15]){s+=`<text x="${x(t)}" y="${H-B+20}" text-anchor="middle" font-size="12" fill="${fg}" font-family="JetBrains Mono,monospace">${t>0?"+"+t:t}</text>`;}
-    s+=`<text x="${L}" y="${H-4}" font-size="12" fill="${fg}" font-family="Inter,system-ui">na zewnątrz °C</text>`;
+    s+=`<text x="${L}" y="${H-4}" font-size="12" fill="${fg}" font-family="Inter,system-ui">outdoor °C</text>`;
     let fp="",rp="";
     for(let t=-15;t<=16;t+=0.5){const f=flowAt(t,p);fp+=(fp?"L":"M")+x(t).toFixed(1)+" "+y(f).toFixed(1);rp+=(rp?"L":"M")+x(t).toFixed(1)+" "+y(f-p.dt).toFixed(1);}
     s+=`<path d="${fp}" fill="none" stroke="${hot}" stroke-width="2.5"/>`;
     s+=`<path d="${rp}" fill="none" stroke="${cold}" stroke-width="2" stroke-dasharray="5 4"/>`;
-    s+=`<text x="${x(-14)}" y="${y(flowAt(-14,p))-8}" font-size="12" fill="${hot}" font-family="Inter,system-ui" font-weight="600">zasilanie</text>`;
-    s+=`<text x="${x(-14)}" y="${y(flowAt(-14,p)-p.dt)+16}" font-size="12" fill="${cold}" font-family="Inter,system-ui" font-weight="600">powrót</text>`;
+    s+=`<text x="${x(-14)}" y="${y(flowAt(-14,p))-8}" font-size="12" fill="${hot}" font-family="Inter,system-ui" font-weight="600">flow</text>`;
+    s+=`<text x="${x(-14)}" y="${y(flowAt(-14,p)-p.dt)+16}" font-size="12" fill="${cold}" font-family="Inter,system-ui" font-weight="600">return</text>`;
     if(!off){
       const cx=x(p.out);
       s+=`<line x1="${cx}" x2="${cx}" y1="${T}" y2="${H-B}" stroke="${surf}" stroke-opacity=".25" stroke-width="1"/>`;
