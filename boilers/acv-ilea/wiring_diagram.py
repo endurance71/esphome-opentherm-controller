@@ -73,7 +73,7 @@ def screw(cx, cy):
 def build(lang):
     t = T[lang]
     W, H = 1040, 720
-    o = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" role="img" aria-label="{esc(t["title"])}">',
+    o = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}" role="img" aria-label="{esc(t["title"])}">',
          f'<rect width="{W}" height="{H}" fill="#ffffff"/>',
          text(30, 40, t["title"], 20, "start", 700)]
 
